@@ -112,14 +112,22 @@ async def list_physical_cameras():
 async def add_camera(request: CameraAddRequest):
     """Agrega una nueva cámara configurada"""
     try:
+        print(f"[DEBUG] Intentando agregar cámara: physical_id={request.physical_id}, nombre={request.nombre}, zona={request.zona}")
         camera = camera_manager.add_camera(
             physical_id=request.physical_id,
             nombre=request.nombre,
             zona=request.zona
         )
+        print(f"[DEBUG] Cámara agregada exitosamente: {camera}")
         return {"success": True, "camera": camera}
     except ValueError as e:
+        print(f"[ERROR] ValueError: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[ERROR] Error inesperado: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 @router.delete("/cameras/{camera_id}")
 async def delete_camera(camera_id: int):

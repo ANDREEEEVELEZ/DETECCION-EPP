@@ -1,98 +1,144 @@
 """
 Módulo de gestión de configuración de cámaras
-Almacena la asignación de cámaras físicas a zonas
+Almacena la asignación de cámaras físicas a zonas en MySQL
 """
-import json
-import os
 from typing import Dict, List, Optional
-from pathlib import Path
-
-CONFIG_FILE = Path(__file__).parent.parent / "data" / "cameras_config.json"
+from sqlalchemy.orm import Session
+from datetime import datetime
 
 class CameraConfigManager:
     def __init__(self):
-        self.config_file = CONFIG_FILE
-        self._ensure_data_dir()
+        pass
     
-    def _ensure_data_dir(self):
-        """Crea el directorio data si no existe"""
-        self.config_file.parent.mkdir(parents=True, exist_ok=True)
-        if not self.config_file.exists():
-            self._save_config([])
-    
-    def _load_config(self) -> List[Dict]:
-        """Carga la configuración desde el archivo JSON"""
-        try:
-            with open(self.config_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return []
-    
-    def _save_config(self, config: List[Dict]):
-        """Guarda la configuración en el archivo JSON"""
-        with open(self.config_file, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
+    def _get_db(self) -> Session:
+        """Obtiene una sesión de base de datos"""
+        from .database import SessionLocal
+        return SessionLocal()
     
     def get_all_cameras(self) -> List[Dict]:
         """Obtiene todas las cámaras configuradas"""
-        return self._load_config()
+        db = self._get_db()
+        try:
+            from .database import Camera
+            cameras = db.query(Camera).all()
+            return [{
+                'id': cam.id,
+                'physical_id': cam.physical_id,
+                'nombre': cam.nombre,
+                'zona': cam.zona,
+                'estado': cam.estado,
+                'resolucion': cam.resolucion
+            } for cam in cameras]
+        finally:
+            db.close()
     
     def add_camera(self, physical_id: int, nombre: str, zona: str) -> Dict:
         """Agrega una nueva cámara configurada"""
-        config = self._load_config()
-        
-        # Verificar que no exista ya esta cámara física
-        for cam in config:
-            if cam['physical_id'] == physical_id:
+        db = self._get_db()
+        try:
+            from .database import Camera
+            
+            # Verificar que no exista ya esta cámara física
+            existing = db.query(Camera).filter_by(physical_id=physical_id).first()
+            if existing:
                 raise ValueError(f"La cámara física {physical_id} ya está configurada")
-        
-        # Generar ID único
-        new_id = max([cam['id'] for cam in config], default=0) + 1
-        
-        new_camera = {
-            'id': new_id,
-            'physical_id': physical_id,
-            'nombre': nombre,
-            'zona': zona,
-            'estado': 'activa',
-            'resolucion': '1280x720'
-        }
-        
-        config.append(new_camera)
-        self._save_config(config)
-        return new_camera
+            
+            # Crear nueva cámara
+            new_camera = Camera(
+                physical_id=physical_id,
+                nombre=nombre,
+                zona=zona,
+                estado='activa',
+                resolucion='1280x720',
+                created_at=datetime.now()
+            )
+            
+            db.add(new_camera)
+            db.commit()
+            db.refresh(new_camera)
+            
+            return {
+                'id': new_camera.id,
+                'physical_id': new_camera.physical_id,
+                'nombre': new_camera.nombre,
+                'zona': new_camera.zona,
+                'estado': new_camera.estado,
+                'resolucion': new_camera.resolucion
+            }
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
     
     def remove_camera(self, camera_id: int) -> bool:
         """Elimina una cámara configurada por su ID"""
-        config = self._load_config()
-        new_config = [cam for cam in config if cam['id'] != camera_id]
-        
-        if len(new_config) == len(config):
-            return False  # No se encontró la cámara
-        
-        self._save_config(new_config)
-        return True
+        db = self._get_db()
+        try:
+            from .database import Camera
+            camera = db.query(Camera).filter_by(id=camera_id).first()
+            
+            if not camera:
+                return False
+            
+            db.delete(camera)
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
     
     def update_camera(self, camera_id: int, nombre: str, zona: str) -> Optional[Dict]:
         """Actualiza los datos de una cámara configurada"""
-        config = self._load_config()
-        
-        for cam in config:
-            if cam['id'] == camera_id:
-                cam['nombre'] = nombre
-                cam['zona'] = zona
-                self._save_config(config)
-                return cam
-        
-        return None
+        db = self._get_db()
+        try:
+            from .database import Camera
+            camera = db.query(Camera).filter_by(id=camera_id).first()
+            
+            if not camera:
+                return None
+            
+            camera.nombre = nombre
+            camera.zona = zona
+            db.commit()
+            db.refresh(camera)
+            
+            return {
+                'id': camera.id,
+                'physical_id': camera.physical_id,
+                'nombre': camera.nombre,
+                'zona': camera.zona,
+                'estado': camera.estado,
+                'resolucion': camera.resolucion
+            }
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
     
     def get_camera_by_id(self, camera_id: int) -> Optional[Dict]:
         """Obtiene una cámara por su ID"""
-        config = self._load_config()
-        for cam in config:
-            if cam['id'] == camera_id:
-                return cam
-        return None
+        db = self._get_db()
+        try:
+            from .database import Camera
+            camera = db.query(Camera).filter_by(id=camera_id).first()
+            
+            if not camera:
+                return None
+            
+            return {
+                'id': camera.id,
+                'physical_id': camera.physical_id,
+                'nombre': camera.nombre,
+                'zona': camera.zona,
+                'estado': camera.estado,
+                'resolucion': camera.resolucion
+            }
+        finally:
+            db.close()
 
 # Instancia global
 camera_manager = CameraConfigManager()

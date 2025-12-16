@@ -1,0 +1,30 @@
+<!-- Navbar Superior -->
+<header class="bg-[#1E293B] border-b border-gray-800 px-6 py-4">
+    <div class="flex items-center justify-between">
+        <!-- Título de página actual -->
+        <div>
+            <h2 class="text-2xl font-bold text-white">{% block page_title %}Dashboard{% endblock %}</h2>
+            <p class="text-sm text-gray-400" id="reloj-tiempo-real">Cargando...</p>
+        </div>
+        
+        <!-- Acciones rápidas -->
+        <div class="flex items-center space-x-4">
+            <!-- Notificaciones -->
+            <button class="relative p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-all">
+                <i data-lucide="bell" class="w-5 h-5"></i>
+                <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+            </button>
+            
+            <!-- Búsqueda -->
+            <button class="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-all">
+                <i data-lucide="search" class="w-5 h-5"></i>
+            </button>
+            
+            <!-- Estado del sistema -->
+            <div class="flex items-center space-x-2 px-3 py-2 bg-green-900/20 border border-green-700 rounded-lg">
+                <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span class="text-sm text-green-400 font-medium">Sistema Activo</span>
+            </div>
+        </div>
+    </div>
+</header>

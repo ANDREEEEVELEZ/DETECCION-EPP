@@ -1,0 +1,95 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Reportes - EPPVISION{% endblock %}
+
+{% block page_title %}Generar Reportes{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Selector de tipo de reporte -->
+    <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6 mb-6">
+        <h3 class="text-lg font-semibold text-white mb-4">Tipo de Reporte</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="flex items-center space-x-3 p-4 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-700 transition-all border-2 border-transparent hover:border-blue-600">
+                <input type="radio" name="tipoReporte" class="w-5 h-5 text-blue-600">
+                <div>
+                    <p class="font-medium text-white">Ficha de Observación (FL-EPP-VD)</p>
+                    <p class="text-sm text-gray-400">Detección del uso de EPP</p>
+                </div>
+            </label>
+            
+            <label class="flex items-center space-x-3 p-4 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-700 transition-all border-2 border-transparent hover:border-blue-600">
+                <input type="radio" name="tipoReporte" class="w-5 h-5 text-blue-600">
+                <div>
+                    <p class="font-medium text-white">Ficha de Precisión y Sensibilidad (FL-PS)</p>
+                    <p class="text-sm text-gray-400">Evaluación del sistema</p>
+                </div>
+            </label>
+            
+            <label class="flex items-center space-x-3 p-4 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-700 transition-all border-2 border-transparent hover:border-blue-600">
+                <input type="radio" name="tipoReporte" class="w-5 h-5 text-blue-600">
+                <div>
+                    <p class="font-medium text-white">Comparativo Manual vs Automático</p>
+                    <p class="text-sm text-gray-400">Análisis de efectividad</p>
+                </div>
+            </label>
+            
+            <label class="flex items-center space-x-3 p-4 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-700 transition-all border-2 border-transparent hover:border-blue-600">
+                <input type="radio" name="tipoReporte" class="w-5 h-5 text-blue-600">
+                <div>
+                    <p class="font-medium text-white">Dashboard General</p>
+                    <p class="text-sm text-gray-400">Resumen completo</p>
+                </div>
+            </label>
+        </div>
+    </div>
+    
+    <!-- Parámetros -->
+    <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6 mb-6">
+        <h3 class="text-lg font-semibold text-white mb-4">Parámetros</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="block text-sm text-gray-400 mb-2">Fecha Inicio</label>
+                <input type="date" class="w-full bg-[#0F1419] border border-gray-700 text-white px-4 py-2 rounded-lg">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-2">Fecha Fin</label>
+                <input type="date" class="w-full bg-[#0F1419] border border-gray-700 text-white px-4 py-2 rounded-lg">
+            </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm text-gray-400 mb-2">Cámara</label>
+                <select class="w-full bg-[#0F1419] border border-gray-700 text-white px-4 py-2 rounded-lg">
+                    <option>Todas las cámaras</option>
+                    <option>Cámara 01 - Entrada Principal</option>
+                    <option>Cámara 02 - Andamios Norte</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-2">Formato</label>
+                <select class="w-full bg-[#0F1419] border border-gray-700 text-white px-4 py-2 rounded-lg">
+                    <option>PDF</option>
+                    <option>Excel</option>
+                    <option>CSV</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Botón generar -->
+    <div class="flex justify-center">
+        <button class="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-3">
+            <i data-lucide="file-text" class="w-5 h-5"></i>
+            <span>Generar Reporte</span>
+        </button>
+    </div>
+    
+    <!-- Placeholder reportes generados -->
+    <div class="mt-8 bg-[#1E293B] border border-gray-800 rounded-xl p-12 text-center">
+        <i data-lucide="folder" class="w-16 h-16 text-gray-700 mx-auto mb-4"></i>
+        <h3 class="text-lg font-semibold text-white mb-2">No hay reportes generados</h3>
+        <p class="text-gray-400">Los reportes generados aparecerán aquí para descargar</p>
+    </div>
+</div>
+{% endblock %}

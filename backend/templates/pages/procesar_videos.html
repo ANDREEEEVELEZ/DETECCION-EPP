@@ -1,0 +1,54 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Procesar Videos - EPPVISION{% endblock %}
+
+{% block page_title %}Procesar Videos Pregrabados{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Upload Area -->
+    <div class="bg-[#1E293B] border-2 border-dashed border-gray-700 rounded-xl p-12 text-center mb-6 hover:border-blue-600 transition-all cursor-pointer">
+        <i data-lucide="upload-cloud" class="w-20 h-20 text-gray-600 mx-auto mb-4"></i>
+        <h3 class="text-xl font-semibold text-white mb-2">Subir Video para Analizar</h3>
+        <p class="text-gray-400 mb-6">Arrastra un archivo de video o haz clic para seleccionar</p>
+        <button class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all">
+            Seleccionar Archivo
+        </button>
+        <p class="text-sm text-gray-500 mt-4">Formatos soportados: MP4, AVI, MOV • Tamaño máximo: 500MB</p>
+    </div>
+    
+    <!-- Configuración de Procesamiento -->
+    <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6 mb-6">
+        <h3 class="text-lg font-semibold text-white mb-4">Configuración de Procesamiento</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm text-gray-400 mb-2">FPS Objetivo</label>
+                <select class="w-full bg-[#0F1419] border border-gray-700 text-white px-4 py-2 rounded-lg">
+                    <option>10 FPS (Recomendado)</option>
+                    <option>15 FPS</option>
+                    <option>30 FPS</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-2">Umbral de Confianza</label>
+                <select class="w-full bg-[#0F1419] border border-gray-700 text-white px-4 py-2 rounded-lg">
+                    <option>75% (Balanceado)</option>
+                    <option>50% (Más detecciones)</option>
+                    <option>90% (Más estricto)</option>
+                </select>
+            </div>
+        </div>
+        <label class="flex items-center space-x-3 mt-4">
+            <input type="checkbox" checked class="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded">
+            <span class="text-sm text-gray-300">Guardar frames con detecciones</span>
+        </label>
+    </div>
+    
+    <!-- Placeholder de lista de videos procesados (vacío) -->
+    <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-12 text-center">
+        <i data-lucide="video" class="w-16 h-16 text-gray-700 mx-auto mb-4"></i>
+        <h3 class="text-lg font-semibold text-white mb-2">No hay videos procesados</h3>
+        <p class="text-gray-400">Los videos procesados aparecerán aquí</p>
+    </div>
+</div>
+{% endblock %}

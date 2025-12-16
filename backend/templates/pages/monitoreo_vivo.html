@@ -1,0 +1,236 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Monitoreo en Vivo - EPPVISION{% endblock %}
+
+{% block page_title %}Monitoreo en Tiempo Real{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-full" x-data="{ selectedCamera: 1 }">
+    <!-- Selector de cámara y controles -->
+    <div class="mb-6 flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+            <!-- Selector de cámara -->
+            <select x-model="selectedCamera" class="bg-[#1E293B] border border-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+                <option value="1">Cámara 01: Entrada Principal</option>
+                <option value="2">Cámara 02: Andamios Norte</option>
+                <option value="3">Cámara 03: Zona de Descarga</option>
+            </select>
+            
+            <!-- Estado de la cámara -->
+            <div class="flex items-center space-x-2 px-3 py-2 bg-green-900/20 border border-green-700 rounded-lg">
+                <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span class="text-sm text-green-400 font-medium">En Línea</span>
+            </div>
+            
+            <!-- Latencia -->
+            <div class="flex items-center space-x-2 px-3 py-2 bg-gray-800 rounded-lg">
+                <i data-lucide="activity" class="w-4 h-4 text-blue-400"></i>
+                <span class="text-sm text-gray-300"><span class="font-semibold text-white">50ms</span> Latency</span>
+            </div>
+        </div>
+        
+        <!-- Botones de acción -->
+        <div class="flex items-center space-x-3">
+            <button class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-all flex items-center space-x-2">
+                <i data-lucide="download" class="w-4 h-4"></i>
+                <span>Exportar Log</span>
+            </button>
+            <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center space-x-2">
+                <i data-lucide="camera" class="w-4 h-4"></i>
+                <span>Captura Instantánea</span>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Contenido principal -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1">
+        <!-- Área de video (3 columnas) -->
+        <div class="lg:col-span-3 space-y-6">
+            <!-- Cards de métricas superiores -->
+            <div class="grid grid-cols-3 gap-4">
+                <div class="bg-[#1E293B] border border-gray-800 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <i data-lucide="users" class="w-5 h-5 text-blue-400"></i>
+                        <span class="text-xs text-green-400 font-semibold">↑ +2</span>
+                    </div>
+                    <p class="text-xs text-gray-400 mb-1">Trabajadores Activos</p>
+                    <p class="text-2xl font-bold text-white">45</p>
+                </div>
+                
+                <div class="bg-[#1E293B] border border-gray-800 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <i data-lucide="shield-check" class="w-5 h-5 text-green-400"></i>
+                        <span class="text-xs text-green-400 font-semibold">↑ +5%</span>
+                    </div>
+                    <p class="text-xs text-gray-400 mb-1">Cumplimiento EPP</p>
+                    <p class="text-2xl font-bold text-white">92%</p>
+                </div>
+                
+                <div class="bg-[#1E293B] border border-gray-800 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <i data-lucide="alert-triangle" class="w-5 h-5 text-red-400"></i>
+                        <span class="text-xs text-red-400 font-semibold">↑ +1</span>
+                    </div>
+                    <p class="text-xs text-gray-400 mb-1">Alertas Hoy</p>
+                    <p class="text-2xl font-bold text-white">3</p>
+                </div>
+            </div>
+            
+            <!-- Stream de video principal -->
+            <div class="bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden">
+                <div class="relative aspect-video bg-gray-900">
+                    <!-- Placeholder de video -->
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="text-center">
+                            <i data-lucide="video-off" class="w-20 h-20 text-gray-700 mx-auto mb-4"></i>
+                            <p class="text-gray-400">Esperando conexión de cámara...</p>
+                            <p class="text-sm text-gray-500 mt-2">La transmisión aparecerá aquí</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Info overlay superior -->
+                    <div class="absolute top-4 left-4 right-4 flex items-start justify-between">
+                        <div class="bg-black/70 backdrop-blur-sm text-white px-4 py-2 rounded-lg">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                                <span class="text-sm font-semibold">EN VIVO</span>
+                            </div>
+                            <p class="text-xs text-gray-300 mt-1">Zona A - Obra Residencial Norte</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Controles de cámara -->
+                <div class="bg-[#2D3748] px-6 py-3 flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <button class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-all" title="Alejar">
+                            <i data-lucide="zoom-out" class="w-5 h-5"></i>
+                        </button>
+                        <button class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-all" title="Acercar">
+                            <i data-lucide="zoom-in" class="w-5 h-5"></i>
+                        </button>
+                        <button class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-all" title="Pantalla completa">
+                            <i data-lucide="maximize" class="w-5 h-5"></i>
+                        </button>
+                        <button class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-all" title="Capturar frame">
+                            <i data-lucide="camera" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="flex items-center space-x-4">
+                        <span class="text-sm text-gray-400">50ms Latency</span>
+                        <button class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all flex items-center space-x-2">
+                            <i data-lucide="grid-2x2" class="w-4 h-4"></i>
+                            <span class="text-sm">Multiview</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Historial completo link -->
+            <button class="w-full py-3 bg-gray-800 hover:bg-gray-700 text-blue-400 rounded-lg transition-all font-medium">
+                VER HISTORIAL COMPLETO
+            </button>
+        </div>
+        
+        <!-- Panel derecho: Alertas recientes (1 columna) -->
+        <div class="lg:col-span-1">
+            <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-4 h-full">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-white">Alertas Recientes</h3>
+                    <span class="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-bold">3 NUEVAS</span>
+                </div>
+                
+                <div class="space-y-3 overflow-y-auto" style="max-height: calc(100vh - 300px);">
+                    <!-- Alerta 1 -->
+                    <div class="bg-red-900/20 border border-red-800 rounded-lg p-3 hover:bg-red-900/30 transition-all cursor-pointer">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-16 h-16 bg-gray-800 rounded-lg flex-shrink-0 overflow-hidden">
+                                <div class="w-full h-full bg-gradient-to-br from-red-900 to-red-700 flex items-center justify-center">
+                                    <i data-lucide="hard-hat" class="w-8 h-8 text-white"></i>
+                                </div>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-start justify-between mb-1">
+                                    <span class="text-sm font-semibold text-white">Falta de Casco</span>
+                                    <span class="text-xs text-red-400 font-bold">CRÍTICO</span>
+                                </div>
+                                <p class="text-xs text-gray-400 mb-2">Zona A - Puerta Norte</p>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-500">10:42 AM</span>
+                                    <span class="text-xs text-gray-400">ID: #8325</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Alerta 2 -->
+                    <div class="bg-orange-900/20 border border-orange-800 rounded-lg p-3 hover:bg-orange-900/30 transition-all cursor-pointer">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-16 h-16 bg-gray-800 rounded-lg flex-shrink-0 overflow-hidden">
+                                <div class="w-full h-full bg-gradient-to-br from-orange-900 to-orange-700 flex items-center justify-center">
+                                    <i data-lucide="shield" class="w-8 h-8 text-white"></i>
+                                </div>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-start justify-between mb-1">
+                                    <span class="text-sm font-semibold text-white">Falta de Chaleco</span>
+                                    <span class="text-xs text-orange-400 font-bold">MODERADO</span>
+                                </div>
+                                <p class="text-xs text-gray-400 mb-2">Zona B - Descarga</p>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-500">10:36 AM</span>
+                                    <span class="text-xs text-gray-400">ID: #7819</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Alerta 3 -->
+                    <div class="bg-yellow-900/20 border border-yellow-800 rounded-lg p-3 hover:bg-yellow-900/30 transition-all cursor-pointer">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-16 h-16 bg-gray-800 rounded-lg flex-shrink-0 overflow-hidden">
+                                <div class="w-full h-full bg-gradient-to-br from-yellow-900 to-yellow-700 flex items-center justify-center">
+                                    <i data-lucide="alert-circle" class="w-8 h-8 text-white"></i>
+                                </div>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-start justify-between mb-1">
+                                    <span class="text-sm font-semibold text-white">Zona Prohibida</span>
+                                    <span class="text-xs text-yellow-400 font-bold">ADVERTENCIA</span>
+                                </div>
+                                <p class="text-xs text-gray-400 mb-2">Zona C - Maquinaria</p>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-500">10:18 AM</span>
+                                    <span class="text-xs text-gray-400">ID: #6204</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Alerta resuelta (ejemplo) -->
+                    <div class="bg-gray-900/20 border border-gray-800 rounded-lg p-3 opacity-50">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-16 h-16 bg-gray-800 rounded-lg flex-shrink-0 overflow-hidden">
+                                <div class="w-full h-full bg-gradient-to-br from-gray-800 to-gray-700 flex items-center justify-center">
+                                    <i data-lucide="check-circle" class="w-8 h-8 text-white"></i>
+                                </div>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-start justify-between mb-1">
+                                    <span class="text-sm font-semibold text-white">Falta de Guantes</span>
+                                    <span class="text-xs text-gray-500 font-bold">RESUELTO</span>
+                                </div>
+                                <p class="text-xs text-gray-400 mb-2">Resuelto por supervisor</p>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-500">09:45 AM</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

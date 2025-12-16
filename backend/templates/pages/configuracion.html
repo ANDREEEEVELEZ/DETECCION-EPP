@@ -1,0 +1,296 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Configuración - EPPVISION{% endblock %}
+
+{% block page_title %}Configuración del Sistema{% endblock %}
+
+{% block content %}
+<div x-data="{ sensibilidad: 75 }">
+    <!-- Breadcrumb -->
+    <div class="flex items-center space-x-2 text-sm text-gray-400 mb-6">
+        <a href="/dashboard" class="hover:text-white">Inicio</a>
+        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        <span class="text-white">Configuración</span>
+    </div>
+    
+    <p class="text-gray-400 mb-6">Gestione cámaras, parámetros de IA y alertas de seguridad para la detección de EPP.</p>
+    
+    <!-- Fuentes de Video -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center space-x-3">
+                <i data-lucide="video" class="w-6 h-6 text-blue-400"></i>
+                <h2 class="text-xl font-bold text-white">Fuentes de Video</h2>
+            </div>
+            <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center space-x-2">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Añadir Cámara</span>
+            </button>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Cámara 1: En Línea -->
+            <div class="bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden card-hover transition-all">
+                <div class="relative aspect-video bg-gray-900">
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <i data-lucide="video" class="w-12 h-12 text-gray-700"></i>
+                    </div>
+                    <div class="absolute top-3 left-3 flex items-center space-x-2 bg-green-900/80 backdrop-blur-sm px-3 py-1 rounded-lg">
+                        <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                        <span class="text-sm text-green-300 font-medium">En Línea</span>
+                    </div>
+                    <div class="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1 rounded-lg">
+                        <span class="text-xs text-white font-mono">RTSP://192.168.1.100:554</span>
+                    </div>
+                </div>
+                <div class="p-4">
+                    <div class="flex items-start justify-between mb-2">
+                        <div>
+                            <h3 class="font-semibold text-white mb-1">Acceso Principal</h3>
+                            <p class="text-sm text-gray-400">Zona A - Exterior</p>
+                        </div>
+                        <button class="text-gray-400 hover:text-white">
+                            <i data-lucide="settings" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center justify-between mt-4">
+                        <button class="text-sm text-blue-400 hover:text-blue-300 font-medium">Ver en Vivo</button>
+                        <button class="text-sm text-red-400 hover:text-red-300 font-medium">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Cámara 2: Latencia Alta -->
+            <div class="bg-[#1E293B] border border-orange-700 rounded-xl overflow-hidden card-hover transition-all">
+                <div class="relative aspect-video bg-gray-900">
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <i data-lucide="video" class="w-12 h-12 text-gray-700"></i>
+                    </div>
+                    <div class="absolute top-3 left-3 flex items-center space-x-2 bg-orange-900/80 backdrop-blur-sm px-3 py-1 rounded-lg">
+                        <div class="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
+                        <span class="text-sm text-orange-300 font-medium">Latencia Alta</span>
+                    </div>
+                    <div class="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1 rounded-lg">
+                        <span class="text-xs text-white font-mono">USB Device: #2</span>
+                    </div>
+                </div>
+                <div class="p-4">
+                    <div class="flex items-start justify-between mb-2">
+                        <div>
+                            <h3 class="font-semibold text-white mb-1">Andamios Norte</h3>
+                            <p class="text-sm text-gray-400">Zona B - Altura</p>
+                        </div>
+                        <button class="text-gray-400 hover:text-white">
+                            <i data-lucide="settings" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center justify-between mt-4">
+                        <button class="text-sm text-blue-400 hover:text-blue-300 font-medium">Ver en Vivo</button>
+                        <button class="text-sm text-red-400 hover:text-red-300 font-medium">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Cámara 3: Desconectado -->
+            <div class="bg-[#1E293B] border border-red-700 rounded-xl overflow-hidden card-hover transition-all">
+                <div class="relative aspect-video bg-gray-900">
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <i data-lucide="video-off" class="w-12 h-12 text-gray-700"></i>
+                    </div>
+                    <div class="absolute top-3 left-3 flex items-center space-x-2 bg-red-900/80 backdrop-blur-sm px-3 py-1 rounded-lg">
+                        <div class="w-2 h-2 bg-red-400 rounded-full"></div>
+                        <span class="text-sm text-red-300 font-medium">Desconectado</span>
+                    </div>
+                    <div class="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1 rounded-lg">
+                        <span class="text-xs text-white font-mono">RTSP://192.168.1.101:554</span>
+                    </div>
+                </div>
+                <div class="p-4">
+                    <div class="flex items-start justify-between mb-2">
+                        <div>
+                            <h3 class="font-semibold text-white mb-1">Zona de Descarga</h3>
+                            <p class="text-sm text-gray-400">Zona C - Patio</p>
+                        </div>
+                        <button class="text-gray-400 hover:text-white">
+                            <i data-lucide="settings" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center justify-between mt-4">
+                        <button class="text-sm text-blue-400 hover:text-blue-300 font-medium">Reconectar</button>
+                        <button class="text-sm text-red-400 hover:text-red-300 font-medium">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Configuración del Modelo IA -->
+    <div class="mb-8">
+        <div class="flex items-center space-x-3 mb-4">
+            <i data-lucide="cpu" class="w-6 h-6 text-purple-400"></i>
+            <h2 class="text-xl font-bold text-white">Configuración del Modelo IA</h2>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Sensibilidad de Detección -->
+            <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-2">Sensibilidad de Detección</h3>
+                <p class="text-sm text-gray-400 mb-6">Ajuste el umbral de confianza mínimo para considerar una detección válida.</p>
+                
+                <div class="mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-sm text-gray-400">0% (Más falsos positivos)</span>
+                        </div>
+                        <div class="px-4 py-2 bg-blue-900/30 border border-blue-700 rounded-lg">
+                            <span class="text-2xl font-bold text-white" x-text="sensibilidad + '%'"></span>
+                        </div>
+                        <span class="text-sm text-gray-400">100% (Más estricto)</span>
+                    </div>
+                    
+                    <input type="range" 
+                           x-model="sensibilidad" 
+                           min="0" 
+                           max="100" 
+                           class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600">
+                </div>
+                
+                <div class="flex items-start space-x-2 p-4 bg-blue-900/20 border border-blue-800 rounded-lg">
+                    <i data-lucide="info" class="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5"></i>
+                    <p class="text-sm text-gray-300">
+                        Un valor más bajo aumenta la capacidad de detección en condiciones de poca luz, pero puede generar alertas incorrectas. Se recomienda mantener entre 70% y 85% para obras en exterior.
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Elementos a Detectar -->
+            <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-2">Elementos a Detectar</h3>
+                <p class="text-sm text-gray-400 mb-6">Seleccione los EPP que el sistema debe monitorear.</p>
+                
+                <div class="space-y-4">
+                    <!-- Casco de Seguridad -->
+                    <div class="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <i data-lucide="hard-hat" class="w-5 h-5 text-yellow-400"></i>
+                            <div>
+                                <p class="text-sm font-medium text-white">Casco de Seguridad</p>
+                                <p class="text-xs text-gray-400">Obligatorio</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" checked class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    
+                    <!-- Chaleco Reflectante -->
+                    <div class="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <i data-lucide="shield" class="w-5 h-5 text-orange-400"></i>
+                            <div>
+                                <p class="text-sm font-medium text-white">Chaleco Reflectante</p>
+                                <p class="text-xs text-gray-400">Obligatorio</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" checked class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    
+                    <!-- Gafas Protectoras -->
+                    <div class="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <i data-lucide="glasses" class="w-5 h-5 text-gray-400"></i>
+                            <div>
+                                <p class="text-sm font-medium text-white">Gafas Protectoras</p>
+                                <p class="text-xs text-gray-400">Opcional</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    
+                    <!-- Botas Industriales -->
+                    <div class="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <i data-lucide="footprints" class="w-5 h-5 text-gray-400"></i>
+                            <div>
+                                <p class="text-sm font-medium text-white">Botas Industriales</p>
+                                <p class="text-xs text-gray-400">Obligatorio</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" checked class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Canales de Alerta -->
+    <div class="mb-8">
+        <div class="flex items-center space-x-3 mb-4">
+            <i data-lucide="bell" class="w-6 h-6 text-red-400"></i>
+            <h2 class="text-xl font-bold text-white">Canales de Alerta</h2>
+        </div>
+        
+        <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6">
+            <h3 class="text-lg font-semibold text-white mb-2">Notificaciones Inmediatas</h3>
+            <p class="text-sm text-gray-400 mb-6">Seleccione cómo desea recibir las alertas cuando se detecte una infracción.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Email -->
+                <label class="flex items-center space-x-3 p-4 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-all">
+                    <input type="checkbox" checked class="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-600">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="mail" class="w-5 h-5 text-blue-400"></i>
+                        <span class="text-sm font-medium text-white">Email</span>
+                    </div>
+                </label>
+                
+                <!-- SMS -->
+                <label class="flex items-center space-x-3 p-4 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-all">
+                    <input type="checkbox" class="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-600">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="message-square" class="w-5 h-5 text-green-400"></i>
+                        <span class="text-sm font-medium text-white">SMS</span>
+                    </div>
+                </label>
+                
+                <!-- Dashboard -->
+                <label class="flex items-center space-x-3 p-4 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-all">
+                    <input type="checkbox" checked class="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-600">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="monitor" class="w-5 h-5 text-purple-400"></i>
+                        <span class="text-sm font-medium text-white">Dashboard</span>
+                    </div>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Botones de Acción -->
+    <div class="flex items-center justify-end space-x-4">
+        <button class="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-2">
+            <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+            <span>Restaurar</span>
+        </button>
+        <button class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-2">
+            <i data-lucide="save" class="w-5 h-5"></i>
+            <span>Guardar Cambios</span>
+        </button>
+    </div>
+</div>
+{% endblock %}

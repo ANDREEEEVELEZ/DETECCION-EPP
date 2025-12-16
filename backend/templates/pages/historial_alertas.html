@@ -1,0 +1,286 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Historial de Alertas - EPPVISION{% endblock %}
+
+{% block page_title %}Historial de Alertas{% endblock %}
+
+{% block content %}
+<div x-data="{ tipoFiltro: 'todas' }">
+    <!-- Filtros -->
+    <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6 mb-6">
+        <p class="text-sm text-gray-400 mb-4">Supervisión de cumplimiento de EPP - Proyecto Torre Norte</p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <!-- Desde -->
+            <div>
+                <label class="block text-sm text-gray-400 mb-2">📅 Desde</label>
+                <input type="date" 
+                       value="2023-10-01"
+                       class="w-full bg-[#0F1419] border border-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            </div>
+            
+            <!-- Hasta -->
+            <div>
+                <label class="block text-sm text-gray-400 mb-2">📅 Hasta</label>
+                <input type="date" 
+                       value="2023-10-02"
+                       class="w-full bg-[#0F1419] border border-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+            </div>
+            
+            <!-- Filtrar por Cámara -->
+            <div>
+                <label class="block text-sm text-gray-400 mb-2">📹 Filtrar por Cámara</label>
+                <select class="w-full bg-[#0F1419] border border-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+                    <option selected>Todas las cámaras ✓</option>
+                    <option>Cámara 01 - Entrada Principal</option>
+                    <option>Cámara 02 - Andamios Norte</option>
+                    <option>Cámara 03 - Zona de Descarga</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- Tipo de Incidencia -->
+        <div class="flex items-center space-x-3">
+            <span class="text-sm text-gray-400">Tipo de Incidencia:</span>
+            <button @click="tipoFiltro = 'todas'" 
+                    :class="tipoFiltro === 'todas' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
+                    class="px-4 py-2 rounded-lg text-sm font-medium transition-all">
+                Todas
+            </button>
+            <button @click="tipoFiltro = 'casco'" 
+                    :class="tipoFiltro === 'casco' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
+                    class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2">
+                <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                <span>Sin Casco</span>
+            </button>
+            <button @click="tipoFiltro = 'chaleco'" 
+                    :class="tipoFiltro === 'chaleco' ? 'bg-orange-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
+                    class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2">
+                <span class="w-2 h-2 bg-orange-500 rounded-full"></span>
+                <span>Chaleco Faltante</span>
+            </button>
+            <button @click="tipoFiltro = 'zona'" 
+                    :class="tipoFiltro === 'zona' ? 'bg-yellow-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
+                    class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2">
+                <span class="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                <span>Zona Restringida</span>
+            </button>
+            <button class="ml-auto px-4 py-2 bg-gray-800 text-gray-400 hover:bg-gray-700 rounded-lg text-sm font-medium transition-all">
+                + Más filtros
+            </button>
+        </div>
+    </div>
+    
+    <!-- Lista de alertas -->
+    <div class="space-y-4">
+        <!-- Alerta 1: Sin Casco - Alta Prioridad -->
+        <div class="bg-[#1E293B] border-l-4 border-red-500 rounded-xl p-6 hover:bg-[#2D3748] transition-all">
+            <div class="flex items-start space-x-6">
+                <!-- Imagen -->
+                <div class="w-48 h-32 bg-gray-900 rounded-lg flex-shrink-0 overflow-hidden relative">
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <i data-lucide="image" class="w-12 h-12 text-gray-700"></i>
+                    </div>
+                    <div class="absolute top-2 left-2 bg-red-600 text-white px-2 py-1 rounded text-xs font-bold">
+                        ALTA PRIORIDAD
+                    </div>
+                    <div class="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
+                        CAM: 82 - NORTE
+                    </div>
+                </div>
+                
+                <!-- Info -->
+                <div class="flex-1">
+                    <div class="flex items-start justify-between mb-3">
+                        <div>
+                            <div class="flex items-center space-x-3 mb-2">
+                                <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                                <h3 class="text-lg font-semibold text-white">Ausencia de Casco</h3>
+                            </div>
+                            <p class="text-sm text-blue-400 mb-2">ID Alerta: #AL-88392</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm font-semibold text-white">Hoy, 14:32 PM</p>
+                            <p class="text-xs text-gray-400">Hace 15 min</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-6 mb-4">
+                        <div>
+                            <p class="text-xs text-gray-400 mb-1">UBICACIÓN</p>
+                            <p class="text-sm font-medium text-white">Acceso Norte ⚐</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-400 mb-1">CONFIANZA IA</p>
+                            <div class="flex items-center space-x-2">
+                                <div class="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+                                    <div class="h-full bg-red-500" style="width: 88.5%"></div>
+                                </div>
+                                <span class="text-sm font-semibold text-white">88.5% ⚠</span>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-400 mb-1">ESTADO</p>
+                            <span class="px-3 py-1 bg-yellow-900/30 border border-yellow-700 text-yellow-400 rounded-lg text-sm font-medium">
+                                Pendiente Revisión
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-3">
+                        <button class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-all">
+                            Marcar Falso Positivo
+                        </button>
+                        <button class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all flex items-center space-x-2">
+                            <span>Ver Evidencia</span>
+                            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Alerta 2: Chaleco Faltante - Media -->
+        <div class="bg-[#1E293B] border-l-4 border-orange-500 rounded-xl p-6 hover:bg-[#2D3748] transition-all">
+            <div class="flex items-start space-x-6">
+                <!-- Imagen -->
+                <div class="w-48 h-32 bg-gray-900 rounded-lg flex-shrink-0 overflow-hidden relative">
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <i data-lucide="image" class="w-12 h-12 text-gray-700"></i>
+                    </div>
+                    <div class="absolute top-2 left-2 bg-orange-600 text-white px-2 py-1 rounded text-xs font-bold">
+                        MEDIA
+                    </div>
+                    <div class="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
+                        CAM: 85 - SCALA
+                    </div>
+                </div>
+                
+                <!-- Info -->
+                <div class="flex-1">
+                    <div class="flex items-start justify-between mb-3">
+                        <div>
+                            <div class="flex items-center space-x-3 mb-2">
+                                <span class="w-2 h-2 bg-orange-500 rounded-full"></span>
+                                <h3 class="text-lg font-semibold text-white">Chaleco Faltante</h3>
+                            </div>
+                            <p class="text-sm text-blue-400 mb-2">ID Alerta: #AL-88391</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm font-semibold text-white">Hoy, 13:15 PM</p>
+                            <p class="text-xs text-gray-400">Hace 1h 30m</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-6 mb-4">
+                        <div>
+                            <p class="text-xs text-gray-400 mb-1">UBICACIÓN</p>
+                            <p class="text-sm font-medium text-white">Andamio Piso 4 ⚐</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-400 mb-1">CONFIANZA IA</p>
+                            <div class="flex items-center space-x-2">
+                                <div class="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+                                    <div class="h-full bg-orange-500" style="width: 92.1%"></div>
+                                </div>
+                                <span class="text-sm font-semibold text-white">92.1% ⚠</span>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-400 mb-1">ESTADO</p>
+                            <span class="px-3 py-1 bg-green-900/30 border border-green-700 text-green-400 rounded-lg text-sm font-medium">
+                                Validado
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-3">
+                        <button class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-all">
+                            Archivar
+                        </button>
+                        <button class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all flex items-center space-x-2">
+                            <span>Ver Evidencia</span>
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Alerta 3: Zona Restringida - Advertencia -->
+        <div class="bg-[#1E293B] border-l-4 border-yellow-500 rounded-xl p-6 hover:bg-[#2D3748] transition-all">
+            <div class="flex items-start space-x-6">
+                <!-- Imagen -->
+                <div class="w-48 h-32 bg-gray-900 rounded-lg flex-shrink-0 overflow-hidden relative">
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <i data-lucide="image" class="w-12 h-12 text-gray-700"></i>
+                    </div>
+                    <div class="absolute top-2 left-2 bg-yellow-600 text-white px-2 py-1 rounded text-xs font-bold">
+                        ADVERTENCIA
+                    </div>
+                    <div class="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
+                        CAM: 81 - LOAD
+                    </div>
+                </div>
+                
+                <!-- Info -->
+                <div class="flex-1">
+                    <div class="flex items-start justify-between mb-3">
+                        <div>
+                            <div class="flex items-center space-x-3 mb-2">
+                                <span class="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                                <h3 class="text-lg font-semibold text-white">Zona Restringida</h3>
+                            </div>
+                            <p class="text-sm text-blue-400 mb-2">ID Alerta: #AL-88390</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm font-semibold text-white">Ayer, 18:45 PM</p>
+                            <p class="text-xs text-gray-400">28 Oct</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-6 mb-4">
+                        <div>
+                            <p class="text-xs text-gray-400 mb-1">UBICACIÓN</p>
+                            <p class="text-sm font-medium text-white">Zona de Carga ⚐</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-400 mb-1">CONFIANZA IA</p>
+                            <div class="flex items-center space-x-2">
+                                <div class="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+                                    <div class="h-full bg-yellow-500" style="width: 85.4%"></div>
+                                </div>
+                                <span class="text-sm font-semibold text-white">85.4% ⚠</span>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-400 mb-1">ESTADO</p>
+                            <span class="px-3 py-1 bg-blue-900/30 border border-blue-700 text-blue-400 rounded-lg text-sm font-medium">
+                                Resuelto
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-3">
+                        <button class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-all">
+                            Reabrir Caso
+                        </button>
+                        <button class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all flex items-center space-x-2">
+                            <span>Ver Evidencia</span>
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Botón Exportar Reporte -->
+    <div class="mt-6 flex justify-center">
+        <button class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all flex items-center space-x-2">
+            <i data-lucide="download" class="w-5 h-5"></i>
+            <span>Exportar Reporte</span>
+        </button>
+    </div>
+</div>
+{% endblock %}

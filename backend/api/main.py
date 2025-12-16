@@ -5,7 +5,7 @@ Solo renderiza las páginas HTML (maquetado)
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from routes import pages
+from routes import pages, video
 import os
 
 # Obtener rutas absolutas
@@ -23,8 +23,9 @@ app = FastAPI(
 # Montar archivos estáticos (CSS, JS, imágenes)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# Incluir rutas de páginas
+# Incluir rutas de páginas y video
 app.include_router(pages.router)
+app.include_router(video.router, prefix="/api")
 
 # Ruta raíz redirige al dashboard
 @app.get("/")

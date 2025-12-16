@@ -7,17 +7,31 @@
 {% block content %}
 <div class="flex flex-col h-full" x-data="{ 
     vistaActual: 'individual',
-    camaras: [
-        { id: 1, nombre: 'Entrada Principal', zona: 'Zona A - Exterior', estado: 'online', latencia: '45ms' },
-        { id: 2, nombre: 'Andamios Norte', zona: 'Zona B - Altura', estado: 'online', latencia: '52ms' },
-        { id: 3, nombre: 'Zona de Descarga', zona: 'Zona C - Patio', estado: 'offline', latencia: '--' },
-        { id: 4, nombre: 'Maquinaria', zona: 'Zona D - Grúas', estado: 'online', latencia: '38ms' }
-    ],
+    camaras: [],
     selectedCamera: 1,
     getCamaraActual() {
         return this.camaras.find(c => c.id === this.selectedCamera) || this.camaras[0];
+    },
+    async loadCameras() {
+        try {
+            const response = await fetch('/api/cameras/list');
+            const data = await response.json();
+            this.camaras = data.cameras.map(cam => ({
+                id: cam.id + 1,
+                logicalId: cam.id,
+                nombre: cam.name,
+                zona: `Zona ${String.fromCharCode(65 + cam.id)}`,
+                estado: cam.status,
+                latencia: '45ms'
+            }));
+            if (this.camaras.length > 0) {
+                this.selectedCamera = 1;
+            }
+        } catch (error) {
+            console.error('Error cargando cámaras:', error);
+        }
     }
-}">
+}" x-init="loadCameras()">
     <!-- Controles superiores -->
     <div class="mb-6 flex items-center justify-between">
         <div class="flex items-center space-x-4">
@@ -115,26 +129,27 @@
             <div x-show="vistaActual === 'individual'" class="bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden">
                 <div class="relative aspect-video bg-gray-900">
                     <!-- Stream de video real -->
-                    <img :src="'/api/stream/' + (selectedCamera - 1)" 
+                    <img x-show="camaras.length > 0" 
+                         :src="'/api/stream/' + (getCamaraActual()?.logicalId ?? 0)" 
                          class="w-full h-full object-cover"
                          alt="Stream de cámara"
                          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
                     
                     <!-- Fallback si no hay cámara -->
-                    <div class="absolute inset-0 flex items-center justify-center" style="display: none;">
+                    <div class="absolute inset-0 flex items-center justify-center" :style="camaras.length === 0 ? 'display: flex' : 'display: none'">
                         <div class="text-center">
                             <i data-lucide="video-off" class="w-20 h-20 text-gray-700 mx-auto mb-4"></i>
-                            <p class="text-gray-400" x-text="'Cámara ' + selectedCamera.toString().padStart(2, '0') + ': ' + getCamaraActual().nombre"></p>
-                            <p class="text-sm text-gray-500 mt-2">Cámara no disponible o desconectada</p>
+                            <p class="text-gray-400">No hay cámaras disponibles</p>
+                            <p class="text-sm text-gray-500 mt-2">Conecta una cámara y recarga la página</p>
                         </div>
                     </div>
                     
-                    <div class="absolute top-4 left-4 bg-black/70 backdrop-blur-sm text-white px-4 py-2 rounded-lg">
+                    <div x-show="camaras.length > 0" class="absolute top-4 left-4 bg-black/70 backdrop-blur-sm text-white px-4 py-2 rounded-lg">
                         <div class="flex items-center space-x-2">
                             <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                             <span class="text-sm font-semibold">EN VIVO</span>
                         </div>
-                        <p class="text-xs text-gray-300 mt-1" x-text="getCamaraActual().zona"></p>
+                        <p class="text-xs text-gray-300 mt-1" x-text="getCamaraActual()?.zona || ''"></p>
                     </div>
                 </div>
                 
@@ -162,18 +177,17 @@
             
             <!-- Vista Grid 2x2 -->
             <div x-show="vistaActual === 'grid-2x2'" class="grid grid-cols-2 gap-4">
-                <template x-for="camara in camaras" :key="camara.id">
+                <template x-for="camara in camaras.slice(0, 4)" :key="camara.id">
                     <div @click="selectedCamera = camara.id; vistaActual = 'individual'" class="bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden hover:border-blue-600 transition-all cursor-pointer">
                         <div class="relative aspect-video bg-gray-900">
-                            <!-- Stream de video (solo para cámara 1) -->
-                            <img x-show="camara.id === 1" 
-                                 :src="'/api/stream/' + (camara.id - 1)" 
+                            <!-- Stream de video -->
+                            <img :src="'/api/stream/' + camara.id"
                                  class="w-full h-full object-cover"
                                  alt="Stream de cámara"
-                                 onerror="this.style.display='none'">
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
                             
-                            <!-- Placeholder para otras cámaras -->
-                            <div x-show="camara.id !== 1 || camara.estado === 'offline'" class="absolute inset-0 flex items-center justify-center">
+                            <!-- Placeholder si falla -->
+                            <div class="absolute inset-0 flex items-center justify-center" style="display: none;">
                                 <div class="text-center">
                                     <i data-lucide="video-off" class="w-12 h-12 text-gray-700 mx-auto mb-2"></i>
                                     <p class="text-sm text-gray-400" x-text="'Cam ' + camara.id.toString().padStart(2, '0')"></p>
@@ -184,14 +198,14 @@
                                 <div class="bg-black/70 backdrop-blur-sm text-white px-3 py-1 rounded-lg">
                                     <span class="text-xs font-semibold" x-text="camara.nombre"></span>
                                 </div>
-                                <div :class="camara.id === 1 ? 'bg-green-900/70' : 'bg-red-900/70'" class="backdrop-blur-sm px-2 py-1 rounded-lg">
-                                    <span :class="camara.id === 1 ? 'text-green-400' : 'text-red-400'" class="text-xs font-bold" x-text="camara.id === 1 ? 'ONLINE' : 'OFFLINE'"></span>
+                                <div :class="camara.estado === 'online' ? 'bg-green-900/70' : 'bg-red-900/70'" class="backdrop-blur-sm px-2 py-1 rounded-lg">
+                                    <span :class="camara.estado === 'online' ? 'text-green-400' : 'text-red-400'" class="text-xs font-bold" x-text="camara.estado.toUpperCase()"></span>
                                 </div>
                             </div>
                         </div>
                         <div class="bg-[#2D3748] px-3 py-2 flex items-center justify-between">
                             <span class="text-xs text-gray-400" x-text="camara.zona"></span>
-                            <span class="text-xs text-gray-500" x-text="camara.id === 1 ? camara.latencia : '--'"></span>
+                            <span class="text-xs text-gray-500" x-text="camara.latencia"></span>
                         </div>
                     </div>
                 </template>
@@ -199,18 +213,17 @@
             
             <!-- Vista Grid 3x2 -->
             <div x-show="vistaActual === 'grid-3x2'" class="grid grid-cols-3 gap-3">
-                <template x-for="camara in camaras" :key="camara.id">
+                <template x-for="camara in camaras.slice(0, 6)" :key="camara.id">
                     <div @click="selectedCamera = camara.id; vistaActual = 'individual'" class="bg-[#1E293B] border border-gray-800 rounded-lg overflow-hidden hover:border-blue-600 transition-all cursor-pointer">
                         <div class="relative aspect-video bg-gray-900">
-                            <!-- Stream de video (solo para cámara 1) -->
-                            <img x-show="camara.id === 1" 
-                                 :src="'/api/stream/' + (camara.id - 1)" 
+                            <!-- Stream de video -->
+                            <img :src="'/api/stream/' + camara.id"
                                  class="w-full h-full object-cover"
                                  alt="Stream de cámara"
-                                 onerror="this.style.display='none'">
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
                             
-                            <!-- Placeholder para otras cámaras -->
-                            <div x-show="camara.id !== 1" class="absolute inset-0 flex items-center justify-center">
+                            <!-- Placeholder si falla -->
+                            <div class="absolute inset-0 flex items-center justify-center" style="display: none;">
                                 <div class="text-center">
                                     <i data-lucide="video-off" class="w-8 h-8 text-gray-700 mx-auto mb-1"></i>
                                     <p class="text-xs text-gray-400" x-text="'Cam ' + camara.id.toString().padStart(2, '0')"></p>

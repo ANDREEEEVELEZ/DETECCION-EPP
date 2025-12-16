@@ -1,0 +1,163 @@
+"""
+Rutas de Video Streaming
+"""
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+import cv2
+
+router = APIRouter()
+
+# Diccionario para almacenar las cámaras activas
+active_cameras = {}
+
+# Mapa de cámaras disponibles: {índice_lógico: id_físico_windows}
+available_cameras_map = {}
+
+def detect_available_cameras():
+    """Detecta todas las cámaras disponibles y crea un mapa lógico"""
+    global available_cameras_map
+    available_cameras_map = {}
+    logical_index = 0
+    
+    # Probar IDs del 0 al 10 (suficiente para la mayoría de casos)
+    for physical_id in range(11):
+        try:
+            temp_cam = cv2.VideoCapture(physical_id)
+            if temp_cam.isOpened():
+                # Probar lectura real
+                success, _ = temp_cam.read()
+                if success:
+                    available_cameras_map[logical_index] = physical_id
+                    logical_index += 1
+            temp_cam.release()
+        except:
+            continue
+    
+    return available_cameras_map
+
+def get_camera(logical_id: int = 0):
+    """Obtiene o crea una instancia de cámara usando ID lógico"""
+    # Detectar cámaras si aún no se ha hecho
+    if not available_cameras_map:
+        detect_available_cameras()
+    
+    # Verificar que el ID lógico existe
+    if logical_id not in available_cameras_map:
+        return None
+    
+    physical_id = available_cameras_map[logical_id]
+    
+    if physical_id not in active_cameras:
+        active_cameras[physical_id] = cv2.VideoCapture(physical_id)
+        # Configurar resolución para mejor rendimiento
+        active_cameras[physical_id].set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        active_cameras[physical_id].set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    
+    return active_cameras[physical_id]
+
+def generate_frames(logical_id: int = 0):
+    """Genera frames de video para streaming usando ID lógico"""
+    camera = get_camera(logical_id)
+    
+    if camera is None or not camera.isOpened():
+        return
+    
+    while True:
+        success, frame = camera.read()
+        if not success:
+            break
+        
+        # Codificar el frame como JPEG
+        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        if not ret:
+            continue
+            
+        frame_bytes = buffer.tobytes()
+        
+        # Retornar el frame en formato MJPEG
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+@router.get("/stream/{logical_id}")
+async def video_stream(logical_id: int):
+    """
+    Stream de video en tiempo real desde la cámara
+    logical_id: Índice lógico (0=primera cámara disponible, 1=segunda, etc.)
+    """
+    return StreamingResponse(
+        generate_frames(logical_id),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+@router.get("/cameras/list")
+async def list_cameras():
+    """Lista todas las cámaras disponibles con sus IDs lógicos"""
+    # Detectar cámaras disponibles
+    detect_available_cameras()
+    
+    cameras_info = []
+    for logical_id, physical_id in available_cameras_map.items():
+        try:
+            temp_cam = cv2.VideoCapture(physical_id)
+            if temp_cam.isOpened():
+                width = int(temp_cam.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(temp_cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                cameras_info.append({
+                    "id": logical_id,
+                    "physical_id": physical_id,
+                    "name": f"Cámara {logical_id + 1}",
+                    "status": "online",
+                    "resolution": f"{width}x{height}"
+                })
+            temp_cam.release()
+        except:
+            continue
+    
+    return {
+        "total": len(cameras_info),
+        "cameras": cameras_info
+    }
+
+@router.post("/cameras/refresh")
+async def refresh_cameras():
+    """Redetecta las cámaras disponibles"""
+    global available_cameras_map, active_cameras
+    
+    # Liberar todas las cámaras activas
+    for cam in active_cameras.values():
+        cam.release()
+    active_cameras.clear()
+    
+    # Redetectar
+    detect_available_cameras()
+    
+    return {
+        "message": "Cámaras actualizadas",
+        "total": len(available_cameras_map),
+        "map": available_cameras_map
+    }
+
+@router.post("/camera/release/{logical_id}")
+async def release_camera(logical_id: int):
+    """Libera una cámara específica"""
+    if not available_cameras_map:
+        detect_available_cameras()
+    
+    if logical_id not in available_cameras_map:
+        return {"message": "Cámara no encontrada"}
+    
+    physical_id = available_cameras_map[logical_id]
+    
+    if physical_id in active_cameras:
+        active_cameras[physical_id].release()
+        del active_cameras[physical_id]
+        return {"message": f"Cámara {logical_id} liberada"}
+    
+    return {"message": "Cámara no estaba activa"}
+
+@router.on_event("shutdown")
+async def shutdown_cameras():
+    """Libera todas las cámaras al cerrar la aplicación"""
+    for camera in active_cameras.values():
+        camera.release()
+    active_cameras.clear()

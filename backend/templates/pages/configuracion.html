@@ -5,7 +5,84 @@
 {% block page_title %}Configuración del Sistema{% endblock %}
 
 {% block content %}
-<div x-data="{ sensibilidad: 75 }">
+<div x-data="{
+    sensibilidad: 75,
+    showAddModal: false,
+    camarasConfigur adas: [],
+    camarasFisicas: [],
+    formData: {
+        physical_id: '',
+        nombre: '',
+        zona: ''
+    },
+    async loadConfiguredCameras() {
+        try {
+            const response = await fetch('/api/cameras/configured');
+            const data = await response.json();
+            this.camarasConfiguradas = data.cameras;
+        } catch (error) {
+            console.error('Error cargando cámaras configuradas:', error);
+        }
+    },
+    async loadPhysicalCameras() {
+        try {
+            const response = await fetch('/api/cameras/physical');
+            const data = await response.json();
+            this.camarasFisicas = data.cameras;
+        } catch (error) {
+            console.error('Error detectando cámaras físicas:', error);
+        }
+    },
+    async addCamera() {
+        if (!this.formData.physical_id || !this.formData.nombre || !this.formData.zona) {
+            alert('Por favor complete todos los campos');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/cameras/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    physical_id: parseInt(this.formData.physical_id),
+                    nombre: this.formData.nombre,
+                    zona: this.formData.zona
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showAddModal = false;
+                this.formData = { physical_id: '', nombre: '', zona: '' };
+                await this.loadConfiguredCameras();
+            } else {
+                alert(data.detail || 'Error al agregar cámara');
+            }
+        } catch (error) {
+            console.error('Error agregando cámara:', error);
+            alert('Error al agregar cámara');
+        }
+    },
+    async deleteCamera(cameraId) {
+        if (!confirm('¿Está seguro de eliminar esta cámara?')) return;
+        
+        try {
+            const response = await fetch(`/api/cameras/${cameraId}`, { method: 'DELETE' });
+            const data = await response.json();
+            
+            if (data.success) {
+                await this.loadConfiguredCameras();
+            }
+        } catch (error) {
+            console.error('Error eliminando cámara:', error);
+        }
+    },
+    async openAddModal() {
+        await this.loadPhysicalCameras();
+        this.showAddModal = true;
+    }
+}" x-init="loadConfiguredCameras()">
     <!-- Breadcrumb -->
     <div class="flex items-center space-x-2 text-sm text-gray-400 mb-6">
         <a href="/dashboard" class="hover:text-white">Inicio</a>
@@ -15,116 +92,142 @@
     
     <p class="text-gray-400 mb-6">Gestione cámaras, parámetros de IA y alertas de seguridad para la detección de EPP.</p>
     
-    <!-- Fuentes de Video -->
+    <!-- Fuentes de Video / Gestión de Cámaras -->
     <div class="mb-8">
         <div class="flex items-center justify-between mb-4">
             <div class="flex items-center space-x-3">
                 <i data-lucide="video" class="w-6 h-6 text-blue-400"></i>
                 <h2 class="text-xl font-bold text-white">Fuentes de Video</h2>
             </div>
-            <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center space-x-2">
+            <button @click="openAddModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center space-x-2">
                 <i data-lucide="plus" class="w-4 h-4"></i>
                 <span>Añadir Cámara</span>
             </button>
         </div>
         
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <!-- Cámara 1: En Línea -->
-            <div class="bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden card-hover transition-all">
-                <div class="relative aspect-video bg-gray-900">
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <i data-lucide="video" class="w-12 h-12 text-gray-700"></i>
-                    </div>
-                    <div class="absolute top-3 left-3 flex items-center space-x-2 bg-green-900/80 backdrop-blur-sm px-3 py-1 rounded-lg">
-                        <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                        <span class="text-sm text-green-300 font-medium">En Línea</span>
-                    </div>
-                    <div class="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1 rounded-lg">
-                        <span class="text-xs text-white font-mono">RTSP://192.168.1.100:554</span>
-                    </div>
-                </div>
-                <div class="p-4">
-                    <div class="flex items-start justify-between mb-2">
-                        <div>
-                            <h3 class="font-semibold text-white mb-1">Acceso Principal</h3>
-                            <p class="text-sm text-gray-400">Zona A - Exterior</p>
+        <!-- Lista de Cámaras Configuradas -->
+        <div x-show="camarasConfiguradas.length === 0" class="bg-[#1E293B] border border-gray-800 rounded-xl p-8 text-center">
+            <i data-lucide="video-off" class="w-16 h-16 text-gray-700 mx-auto mb-4"></i>
+            <p class="text-gray-400 mb-4">No hay cámaras configuradas</p>
+            <button @click="openAddModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all">
+                Agregar Primera Cámara
+            </button>
+        </div>
+        
+        <div x-show="camarasConfiguradas.length > 0" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <template x-for="camera in camarasConfiguradas" :key="camera.id">
+                <div class="bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden card-hover transition-all">
+                    <div class="relative aspect-video bg-gray-900">
+                        <!-- Preview de Stream -->
+                        <img :src="'/api/stream/' + camera.id" 
+                             class="w-full h-full object-cover"
+                             alt="Stream"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                        
+                        <div class="absolute inset-0 flex items-center justify-center" style="display: none;">
+                            <i data-lucide="video" class="w-12 h-12 text-gray-700"></i>
                         </div>
-                        <button class="text-gray-400 hover:text-white">
-                            <i data-lucide="settings" class="w-5 h-5"></i>
-                        </button>
+                        
+                        <div class="absolute top-3 left-3 flex items-center space-x-2 bg-green-900/80 backdrop-blur-sm px-3 py-1 rounded-lg">
+                            <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                            <span class="text-sm text-green-300 font-medium" x-text="camera.estado"></span>
+                        </div>
+                        <div class="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1 rounded-lg">
+                            <span class="text-xs text-white font-mono">Cámara Física #<span x-text="camera.physical_id"></span></span>
+                        </div>
                     </div>
-                    <div class="flex items-center justify-between mt-4">
-                        <button class="text-sm text-blue-400 hover:text-blue-300 font-medium">Ver en Vivo</button>
-                        <button class="text-sm text-red-400 hover:text-red-300 font-medium">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
+                    <div class="p-4">
+                        <div class="flex items-start justify-between mb-2">
+                            <div>
+                                <h3 class="font-semibold text-white mb-1" x-text="camera.nombre"></h3>
+                                <p class="text-sm text-gray-400" x-text="camera.zona"></p>
+                            </div>
+                            <button @click="deleteCamera(camera.id)" class="text-gray-400 hover:text-red-400">
+                                <i data-lucide="trash-2" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                        <div class="flex items-center justify-between mt-4">
+                            <a :href="'/monitoreo-vivo'" class="text-sm text-blue-400 hover:text-blue-300 font-medium">Ver en Vivo</a>
+                            <span class="text-xs text-gray-500" x-text="camera.resolucion"></span>
+                        </div>
                     </div>
                 </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Modal Agregar Cámara -->
+    <div x-show="showAddModal" 
+         x-cloak
+         class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+         @click.self="showAddModal = false">
+        <div class="bg-[#1E293B] border border-gray-800 rounded-2xl max-w-2xl w-full overflow-hidden" @click.stop>
+            <div class="p-6 border-b border-gray-800 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <i data-lucide="video-plus" class="w-6 h-6 text-blue-400"></i>
+                    <h3 class="text-xl font-bold text-white">Agregar Nueva Cámara</h3>
+                </div>
+                <button @click="showAddModal = false" class="text-gray-400 hover:text-white">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
             </div>
             
-            <!-- Cámara 2: Latencia Alta -->
-            <div class="bg-[#1E293B] border border-orange-700 rounded-xl overflow-hidden card-hover transition-all">
-                <div class="relative aspect-video bg-gray-900">
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <i data-lucide="video" class="w-12 h-12 text-gray-700"></i>
-                    </div>
-                    <div class="absolute top-3 left-3 flex items-center space-x-2 bg-orange-900/80 backdrop-blur-sm px-3 py-1 rounded-lg">
-                        <div class="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
-                        <span class="text-sm text-orange-300 font-medium">Latencia Alta</span>
-                    </div>
-                    <div class="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1 rounded-lg">
-                        <span class="text-xs text-white font-mono">USB Device: #2</span>
-                    </div>
+            <div class="p-6">
+                <p class="text-gray-400 mb-6">Selecciona una cámara física disponible y asígnala a una zona de monitoreo.</p>
+                
+                <!-- Selector de Cámara Física -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">
+                        <i data-lucide="camera" class="w-4 h-4 inline mr-1"></i>
+                        Cámara Física Detectada
+                    </label>
+                    <select x-model="formData.physical_id" 
+                            class="w-full bg-[#0F172A] border border-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+                        <option value="">-- Seleccione una cámara --</option>
+                        <template x-for="cam in camarasFisicas" :key="cam.physical_id">
+                            <option :value="cam.physical_id" x-text="`${cam.nombre} (${cam.resolucion})`"></option>
+                        </template>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-2">
+                        <i data-lucide="info" class="w-3 h-3 inline"></i>
+                        <span x-text="camarasFisicas.length + ' cámaras físicas detectadas'"></span>
+                    </p>
                 </div>
-                <div class="p-4">
-                    <div class="flex items-start justify-between mb-2">
-                        <div>
-                            <h3 class="font-semibold text-white mb-1">Andamios Norte</h3>
-                            <p class="text-sm text-gray-400">Zona B - Altura</p>
-                        </div>
-                        <button class="text-gray-400 hover:text-white">
-                            <i data-lucide="settings" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                    <div class="flex items-center justify-between mt-4">
-                        <button class="text-sm text-blue-400 hover:text-blue-300 font-medium">Ver en Vivo</button>
-                        <button class="text-sm text-red-400 hover:text-red-300 font-medium">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
-                    </div>
+                
+                <!-- Nombre de la Cámara -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">
+                        <i data-lucide="tag" class="w-4 h-4 inline mr-1"></i>
+                        Nombre de la Cámara
+                    </label>
+                    <input type="text" 
+                           x-model="formData.nombre"
+                           placeholder="Ej: Acceso Principal, Área de Carga"
+                           class="w-full bg-[#0F172A] border border-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
                 </div>
-            </div>
-            
-            <!-- Cámara 3: Desconectado -->
-            <div class="bg-[#1E293B] border border-red-700 rounded-xl overflow-hidden card-hover transition-all">
-                <div class="relative aspect-video bg-gray-900">
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <i data-lucide="video-off" class="w-12 h-12 text-gray-700"></i>
-                    </div>
-                    <div class="absolute top-3 left-3 flex items-center space-x-2 bg-red-900/80 backdrop-blur-sm px-3 py-1 rounded-lg">
-                        <div class="w-2 h-2 bg-red-400 rounded-full"></div>
-                        <span class="text-sm text-red-300 font-medium">Desconectado</span>
-                    </div>
-                    <div class="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1 rounded-lg">
-                        <span class="text-xs text-white font-mono">RTSP://192.168.1.101:554</span>
-                    </div>
+                
+                <!-- Zona de Monitoreo -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">
+                        <i data-lucide="map-pin" class="w-4 h-4 inline mr-1"></i>
+                        Zona de Monitoreo
+                    </label>
+                    <input type="text" 
+                           x-model="formData.zona"
+                           placeholder="Ej: Zona A - Exterior, Zona B - Altura"
+                           class="w-full bg-[#0F172A] border border-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
                 </div>
-                <div class="p-4">
-                    <div class="flex items-start justify-between mb-2">
-                        <div>
-                            <h3 class="font-semibold text-white mb-1">Zona de Descarga</h3>
-                            <p class="text-sm text-gray-400">Zona C - Patio</p>
-                        </div>
-                        <button class="text-gray-400 hover:text-white">
-                            <i data-lucide="settings" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                    <div class="flex items-center justify-between mt-4">
-                        <button class="text-sm text-blue-400 hover:text-blue-300 font-medium">Reconectar</button>
-                        <button class="text-sm text-red-400 hover:text-red-300 font-medium">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
-                    </div>
+                
+                <div class="flex items-center justify-end space-x-3 pt-4">
+                    <button @click="showAddModal = false" 
+                            class="px-4 py-2 text-gray-400 hover:text-white transition-all">
+                        Cancelar
+                    </button>
+                    <button @click="addCamera()" 
+                            class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center space-x-2">
+                        <i data-lucide="check" class="w-4 h-4"></i>
+                        <span>Agregar Cámara</span>
+                    </button>
                 </div>
             </div>
         </div>

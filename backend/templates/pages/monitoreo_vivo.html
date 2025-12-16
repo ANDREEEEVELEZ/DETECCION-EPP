@@ -5,39 +5,74 @@
 {% block page_title %}Monitoreo en Tiempo Real{% endblock %}
 
 {% block content %}
-<div class="flex flex-col h-full" x-data="{ selectedCamera: 1 }">
-    <!-- Selector de cámara y controles -->
+<div class="flex flex-col h-full" x-data="{ 
+    vistaActual: 'individual',
+    camaras: [
+        { id: 1, nombre: 'Entrada Principal', zona: 'Zona A - Exterior', estado: 'online', latencia: '45ms' },
+        { id: 2, nombre: 'Andamios Norte', zona: 'Zona B - Altura', estado: 'online', latencia: '52ms' },
+        { id: 3, nombre: 'Zona de Descarga', zona: 'Zona C - Patio', estado: 'offline', latencia: '--' },
+        { id: 4, nombre: 'Maquinaria', zona: 'Zona D - Grúas', estado: 'online', latencia: '38ms' }
+    ],
+    selectedCamera: 1,
+    getCamaraActual() {
+        return this.camaras.find(c => c.id === this.selectedCamera) || this.camaras[0];
+    }
+}">
+    <!-- Controles superiores -->
     <div class="mb-6 flex items-center justify-between">
         <div class="flex items-center space-x-4">
-            <!-- Selector de cámara -->
-            <select x-model="selectedCamera" class="bg-[#1E293B] border border-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
-                <option value="1">Cámara 01: Entrada Principal</option>
-                <option value="2">Cámara 02: Andamios Norte</option>
-                <option value="3">Cámara 03: Zona de Descarga</option>
-            </select>
-            
-            <!-- Estado de la cámara -->
-            <div class="flex items-center space-x-2 px-3 py-2 bg-green-900/20 border border-green-700 rounded-lg">
-                <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span class="text-sm text-green-400 font-medium">En Línea</span>
+            <!-- Selector de vista -->
+            <div class="flex items-center space-x-2 bg-[#1E293B] border border-gray-700 rounded-lg p-1">
+                <button @click="vistaActual = 'individual'" 
+                        :class="vistaActual === 'individual' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'"
+                        class="px-4 py-2 rounded-lg transition-all flex items-center space-x-2">
+                    <i data-lucide="square" class="w-4 h-4"></i>
+                    <span class="text-sm font-medium">Individual</span>
+                </button>
+                <button @click="vistaActual = 'grid-2x2'" 
+                        :class="vistaActual === 'grid-2x2' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'"
+                        class="px-4 py-2 rounded-lg transition-all flex items-center space-x-2">
+                    <i data-lucide="grid-2x2" class="w-4 h-4"></i>
+                    <span class="text-sm font-medium">2x2</span>
+                </button>
+                <button @click="vistaActual = 'grid-3x2'" 
+                        :class="vistaActual === 'grid-3x2' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'"
+                        class="px-4 py-2 rounded-lg transition-all flex items-center space-x-2">
+                    <i data-lucide="layout-grid" class="w-4 h-4"></i>
+                    <span class="text-sm font-medium">3x2</span>
+                </button>
             </div>
             
-            <!-- Latencia -->
+            <!-- Selector de cámara (solo en vista individual) -->
+            <div x-show="vistaActual === 'individual'">
+                <select x-model.number="selectedCamera" class="bg-[#1E293B] border border-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600">
+                    <template x-for="camara in camaras" :key="camara.id">
+                        <option :value="camara.id" x-text="'Cámara ' + camara.id.toString().padStart(2, '0') + ': ' + camara.nombre"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <!-- Estado general -->
             <div class="flex items-center space-x-2 px-3 py-2 bg-gray-800 rounded-lg">
-                <i data-lucide="activity" class="w-4 h-4 text-blue-400"></i>
-                <span class="text-sm text-gray-300"><span class="font-semibold text-white">50ms</span> Latency</span>
+                <i data-lucide="video" class="w-4 h-4 text-blue-400"></i>
+                <span class="text-sm text-gray-300">
+                    <span class="font-semibold text-white" x-text="camaras.filter(c => c.estado === 'online').length"></span>
+                    /
+                    <span x-text="camaras.length"></span>
+                    cámaras activas
+                </span>
             </div>
         </div>
         
         <!-- Botones de acción -->
         <div class="flex items-center space-x-3">
             <button class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-all flex items-center space-x-2">
-                <i data-lucide="download" class="w-4 h-4"></i>
-                <span>Exportar Log</span>
+                <i data-lucide="maximize" class="w-4 h-4"></i>
+                <span>Pantalla Completa</span>
             </button>
             <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center space-x-2">
                 <i data-lucide="camera" class="w-4 h-4"></i>
-                <span>Captura Instantánea</span>
+                <span x-text="vistaActual === 'individual' ? 'Captura' : 'Capturar Todo'"></span>
             </button>
         </div>
     </div>
@@ -76,31 +111,26 @@
                 </div>
             </div>
             
-            <!-- Stream de video principal -->
-            <div class="bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden">
+            <!-- Vista Individual -->
+            <div x-show="vistaActual === 'individual'" class="bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden">
                 <div class="relative aspect-video bg-gray-900">
-                    <!-- Placeholder de video -->
                     <div class="absolute inset-0 flex items-center justify-center">
                         <div class="text-center">
                             <i data-lucide="video-off" class="w-20 h-20 text-gray-700 mx-auto mb-4"></i>
-                            <p class="text-gray-400">Esperando conexión de cámara...</p>
+                            <p class="text-gray-400" x-text="'Cámara ' + selectedCamera.toString().padStart(2, '0') + ': ' + getCamaraActual().nombre"></p>
                             <p class="text-sm text-gray-500 mt-2">La transmisión aparecerá aquí</p>
                         </div>
                     </div>
                     
-                    <!-- Info overlay superior -->
-                    <div class="absolute top-4 left-4 right-4 flex items-start justify-between">
-                        <div class="bg-black/70 backdrop-blur-sm text-white px-4 py-2 rounded-lg">
-                            <div class="flex items-center space-x-2">
-                                <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                                <span class="text-sm font-semibold">EN VIVO</span>
-                            </div>
-                            <p class="text-xs text-gray-300 mt-1">Zona A - Obra Residencial Norte</p>
+                    <div class="absolute top-4 left-4 bg-black/70 backdrop-blur-sm text-white px-4 py-2 rounded-lg">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                            <span class="text-sm font-semibold">EN VIVO</span>
                         </div>
+                        <p class="text-xs text-gray-300 mt-1" x-text="getCamaraActual().zona"></p>
                     </div>
                 </div>
                 
-                <!-- Controles de cámara -->
                 <div class="bg-[#2D3748] px-6 py-3 flex items-center justify-between">
                     <div class="flex items-center space-x-4">
                         <button class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-all" title="Alejar">
@@ -118,19 +148,67 @@
                     </div>
                     
                     <div class="flex items-center space-x-4">
-                        <span class="text-sm text-gray-400">50ms Latency</span>
-                        <button class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all flex items-center space-x-2">
-                            <i data-lucide="grid-2x2" class="w-4 h-4"></i>
-                            <span class="text-sm">Multiview</span>
-                        </button>
+                        <span class="text-sm text-gray-400" x-text="getCamaraActual().latencia + ' Latency'"></span>
                     </div>
                 </div>
             </div>
             
-            <!-- Historial completo link -->
-            <button class="w-full py-3 bg-gray-800 hover:bg-gray-700 text-blue-400 rounded-lg transition-all font-medium">
-                VER HISTORIAL COMPLETO
-            </button>
+            <!-- Vista Grid 2x2 -->
+            <div x-show="vistaActual === 'grid-2x2'" class="grid grid-cols-2 gap-4">
+                <template x-for="camara in camaras" :key="camara.id">
+                    <div @click="selectedCamera = camara.id; vistaActual = 'individual'" class="bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden hover:border-blue-600 transition-all cursor-pointer">
+                        <div class="relative aspect-video bg-gray-900">
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <div class="text-center">
+                                    <i data-lucide="video-off" class="w-12 h-12 text-gray-700 mx-auto mb-2"></i>
+                                    <p class="text-sm text-gray-400" x-text="'Cam ' + camara.id.toString().padStart(2, '0')"></p>
+                                </div>
+                            </div>
+                            
+                            <div class="absolute top-2 left-2 right-2 flex items-start justify-between">
+                                <div class="bg-black/70 backdrop-blur-sm text-white px-3 py-1 rounded-lg">
+                                    <span class="text-xs font-semibold" x-text="camara.nombre"></span>
+                                </div>
+                                <div :class="camara.estado === 'online' ? 'bg-green-900/70' : 'bg-red-900/70'" class="backdrop-blur-sm px-2 py-1 rounded-lg">
+                                    <span :class="camara.estado === 'online' ? 'text-green-400' : 'text-red-400'" class="text-xs font-bold" x-text="camara.estado.toUpperCase()"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-[#2D3748] px-3 py-2 flex items-center justify-between">
+                            <span class="text-xs text-gray-400" x-text="camara.zona"></span>
+                            <span class="text-xs text-gray-500" x-text="camara.latencia"></span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            
+            <!-- Vista Grid 3x2 -->
+            <div x-show="vistaActual === 'grid-3x2'" class="grid grid-cols-3 gap-3">
+                <template x-for="camara in camaras" :key="camara.id">
+                    <div @click="selectedCamera = camara.id; vistaActual = 'individual'" class="bg-[#1E293B] border border-gray-800 rounded-lg overflow-hidden hover:border-blue-600 transition-all cursor-pointer">
+                        <div class="relative aspect-video bg-gray-900">
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <div class="text-center">
+                                    <i data-lucide="video-off" class="w-8 h-8 text-gray-700 mx-auto mb-1"></i>
+                                    <p class="text-xs text-gray-400" x-text="'Cam ' + camara.id.toString().padStart(2, '0')"></p>
+                                </div>
+                            </div>
+                            
+                            <div class="absolute top-1 left-1 right-1 flex items-start justify-between">
+                                <div class="bg-black/70 backdrop-blur-sm text-white px-2 py-1 rounded">
+                                    <span class="text-xs font-semibold" x-text="camara.nombre"></span>
+                                </div>
+                                <div :class="camara.estado === 'online' ? 'bg-green-900/70' : 'bg-red-900/70'" class="backdrop-blur-sm px-2 py-1 rounded">
+                                    <div :class="camara.estado === 'online' ? 'bg-green-500' : 'bg-red-500'" class="w-2 h-2 rounded-full"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-[#2D3748] px-2 py-1">
+                            <span class="text-xs text-gray-500" x-text="camara.latencia"></span>
+                        </div>
+                    </div>
+                </template>
+            </div>
         </div>
         
         <!-- Panel derecho: Alertas recientes (1 columna) -->

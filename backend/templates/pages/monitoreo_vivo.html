@@ -14,21 +14,16 @@
     },
     async loadCameras() {
         try {
-            const response = await fetch('/api/cameras/list');
+            const response = await fetch('/api/cameras/configured');
             const data = await response.json();
-            this.camaras = data.cameras.map(cam => ({
-                id: cam.id + 1,
-                logicalId: cam.id,
-                nombre: cam.name,
-                zona: `Zona ${String.fromCharCode(65 + cam.id)}`,
-                estado: cam.status,
-                latencia: '45ms'
-            }));
+            this.camaras = data.cameras || [];
             if (this.camaras.length > 0) {
-                this.selectedCamera = 1;
+                this.selectedCamera = this.camaras[0].id;
             }
+            console.log('Cámaras cargadas:', this.camaras);
         } catch (error) {
             console.error('Error cargando cámaras:', error);
+            this.camaras = [];
         }
     }
 }" x-init="loadCameras()">

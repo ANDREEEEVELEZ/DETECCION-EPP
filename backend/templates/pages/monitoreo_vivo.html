@@ -8,7 +8,7 @@
 <div class="flex flex-col h-full" x-data="{ 
     vistaActual: 'individual',
     camaras: [],
-    selectedCamera: 1,
+    selectedCamera: null,
     getCamaraActual() {
         return this.camaras.find(c => c.id === this.selectedCamera) || this.camaras[0];
     },
@@ -65,7 +65,7 @@
             <div class="flex items-center space-x-2 px-3 py-2 bg-gray-800 rounded-lg">
                 <i data-lucide="video" class="w-4 h-4 text-blue-400"></i>
                 <span class="text-sm text-gray-300">
-                    <span class="font-semibold text-white" x-text="camaras.filter(c => c.estado === 'online').length"></span>
+                    <span class="font-semibold text-white" x-text="camaras.filter(c => c.estado === 'activa').length"></span>
                     /
                     <span x-text="camaras.length"></span>
                     cámaras activas
@@ -124,8 +124,8 @@
             <div x-show="vistaActual === 'individual'" class="bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden">
                 <div class="relative aspect-video bg-gray-900">
                     <!-- Stream de video real -->
-                    <img x-show="camaras.length > 0" 
-                         :src="'/api/stream/' + (getCamaraActual()?.logicalId ?? 0)" 
+                    <img x-show="camaras.length > 0 && getCamaraActual()" 
+                         :src="'/api/stream/' + getCamaraActual().id" 
                          class="w-full h-full object-cover"
                          alt="Stream de cámara"
                          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
@@ -165,7 +165,7 @@
                     </div>
                     
                     <div class="flex items-center space-x-4">
-                        <span class="text-sm text-gray-400" x-text="getCamaraActual().latencia + ' Latency'"></span>
+                        <span class="text-sm text-gray-400">Tiempo real</span>
                     </div>
                 </div>
             </div>
@@ -193,14 +193,14 @@
                                 <div class="bg-black/70 backdrop-blur-sm text-white px-3 py-1 rounded-lg">
                                     <span class="text-xs font-semibold" x-text="camara.nombre"></span>
                                 </div>
-                                <div :class="camara.estado === 'online' ? 'bg-green-900/70' : 'bg-red-900/70'" class="backdrop-blur-sm px-2 py-1 rounded-lg">
-                                    <span :class="camara.estado === 'online' ? 'text-green-400' : 'text-red-400'" class="text-xs font-bold" x-text="camara.estado.toUpperCase()"></span>
+                                <div :class="camara.estado === 'activa' ? 'bg-green-900/70' : 'bg-red-900/70'" class="backdrop-blur-sm px-2 py-1 rounded-lg">
+                                    <span :class="camara.estado === 'activa' ? 'text-green-400' : 'text-red-400'" class="text-xs font-bold" x-text="camara.estado.toUpperCase()"></span>
                                 </div>
                             </div>
                         </div>
                         <div class="bg-[#2D3748] px-3 py-2 flex items-center justify-between">
                             <span class="text-xs text-gray-400" x-text="camara.zona"></span>
-                            <span class="text-xs text-gray-500" x-text="camara.latencia"></span>
+                            <span class="text-xs text-gray-500" x-text="camara.resolucion"></span>
                         </div>
                     </div>
                 </template>
@@ -229,13 +229,13 @@
                                 <div class="bg-black/70 backdrop-blur-sm text-white px-2 py-1 rounded">
                                     <span class="text-xs font-semibold" x-text="camara.nombre"></span>
                                 </div>
-                                <div :class="camara.id === 1 ? 'bg-green-900/70' : 'bg-red-900/70'" class="backdrop-blur-sm px-2 py-1 rounded">
-                                    <div :class="camara.id === 1 ? 'bg-green-500' : 'bg-red-500'" class="w-2 h-2 rounded-full"></div>
+                                <div :class="camara.estado === 'activa' ? 'bg-green-900/70' : 'bg-red-900/70'" class="backdrop-blur-sm px-2 py-1 rounded">
+                                    <div :class="camara.estado === 'activa' ? 'bg-green-500' : 'bg-red-500'" class="w-2 h-2 rounded-full"></div>
                                 </div>
                             </div>
                         </div>
                         <div class="bg-[#2D3748] px-2 py-1">
-                            <span class="text-xs text-gray-500" x-text="camara.id === 1 ? camara.latencia : '--'"></span>
+                            <span class="text-xs text-gray-500" x-text="camara.resolucion"></span>
                         </div>
                     </div>
                 </template>

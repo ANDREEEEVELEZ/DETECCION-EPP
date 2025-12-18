@@ -16,6 +16,9 @@ router = APIRouter()
 # Diccionario para cámaras activas
 active_cameras = {}
 
+# Detector EPP global (se carga bajo demanda)
+epp_detector = None
+
 class CameraAddRequest(BaseModel):
     physical_id: int
     nombre: str
@@ -37,29 +40,70 @@ def get_camera(camera_id: int):
     
     physical_id = cam_config['physical_id']
     
+    print(f"[VIDEO] Intentando abrir cámara física ID={physical_id} (Camera DB ID={camera_id})")
+    
     # Crear nueva instancia de cámara
     cap = cv2.VideoCapture(physical_id, cv2.CAP_DSHOW)
+    
+    if not cap.isOpened():
+        print(f"[VIDEO ERROR] No se pudo abrir cámara física ID={physical_id}. Puede estar en uso por otra aplicación.")
+        return None
+    
+    # Configurar resolución
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap.set(cv2.CAP_PROP_FPS, 30)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     
-    if cap.isOpened():
-        active_cameras[camera_id] = cap
-        return cap
-    return None
+    print(f"[VIDEO OK] Cámara física ID={physical_id} abierta correctamente")
+    active_cameras[camera_id] = cap
+    return cap
 
-def generate_frames(camera_id: int):
+def generate_frames(camera_id: int, enable_detection: bool = False):
     """Genera frames de video para streaming MJPEG"""
+    global epp_detector
+    
     camera = get_camera(camera_id)
     
     if camera is None:
+        print(f"[VIDEO ERROR] No se pudo obtener cámara para streaming (camera_id={camera_id})")
         # Generar frame de error
         yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + b'\xff\xd8\xff\xe0' + b'\r\n'
         return
     
+    # Cargar detector si está habilitada la detección
+    if enable_detection and epp_detector is None:
+        try:
+            print("[INFO] Cargando modelo EPP por primera vez...")
+            # Import relativo desde la estructura del proyecto
+            import sys
+            import os
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            sys.path.insert(0, project_root)
+            
+            from backend.core.epp_detector import EPPDetector
+            epp_detector = EPPDetector(model_path="models/best.pt")
+            print("[INFO] Modelo EPP cargado exitosamente")
+        except Exception as e:
+            print(f"[ERROR] No se pudo cargar modelo EPP: {e}")
+            import traceback
+            traceback.print_exc()
+            enable_detection = False
+    
+    print(f"[VIDEO] Iniciando streaming para camera_id={camera_id} (detección={'ON' if enable_detection else 'OFF'})")
+    
     while True:
         success, frame = camera.read()
         if not success:
+            print(f"[VIDEO ERROR] No se pudo leer frame de camera_id={camera_id}")
             break
+        
+        # Procesar con detector EPP si está habilitado
+        if enable_detection and epp_detector is not None:
+            try:
+                frame, detections, compliance = epp_detector.process_frame(frame, draw=True)
+            except Exception as e:
+                print(f"[ERROR] Error en detección EPP: {e}")
         
         # Convertir a JPEG
         ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
@@ -73,10 +117,10 @@ def generate_frames(camera_id: int):
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
 @router.get("/stream/{camera_id}")
-async def video_stream(camera_id: int):
+async def video_stream(camera_id: int, detect: bool = False):
     """Endpoint de streaming de video para una cámara configurada"""
     return StreamingResponse(
-        generate_frames(camera_id),
+        generate_frames(camera_id, enable_detection=detect),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
@@ -91,6 +135,13 @@ async def list_physical_cameras():
     """Detecta y lista todas las cámaras físicas conectadas al sistema"""
     available = []
     
+    # Obtener nombres reales de cámaras en Windows usando DirectShow
+    try:
+        import pygrabber.dshow_graph as dsg
+        device_names = dsg.FilterGraph().get_input_devices()
+    except:
+        device_names = []
+    
     # Detectar cámaras físicas disponibles (IDs 0-10)
     for cam_id in range(11):
         cap = cv2.VideoCapture(cam_id, cv2.CAP_DSHOW)
@@ -99,9 +150,12 @@ async def list_physical_cameras():
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             
+            # Usar nombre real si está disponible, sino usar nombre genérico
+            nombre = device_names[cam_id] if cam_id < len(device_names) else f"Cámara #{cam_id}"
+            
             available.append({
                 "physical_id": cam_id,
-                "nombre": f"Cámara #{cam_id}",
+                "nombre": nombre,
                 "resolucion": f"{width}x{height}"
             })
             cap.release()

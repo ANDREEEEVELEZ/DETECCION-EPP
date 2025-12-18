@@ -117,15 +117,14 @@
         <div x-show="camarasConfiguradas.length > 0" class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <template x-for="camera in camarasConfiguradas" :key="camera.id">
                 <div class="bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden card-hover transition-all">
-                    <div class="relative aspect-video bg-gray-900">
-                        <!-- Preview de Stream -->
-                        <img :src="'/api/stream/' + camera.id" 
-                             class="w-full h-full object-cover"
-                             alt="Stream"
-                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-                        
-                        <div class="absolute inset-0 flex items-center justify-center" style="display: none;">
-                            <i data-lucide="video" class="w-12 h-12 text-gray-700"></i>
+                    <div class="relative aspect-video bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+                        <!-- Placeholder de Cámara (no stream en vivo para evitar conflictos) -->
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <div class="text-center">
+                                <i data-lucide="video" class="w-16 h-16 text-gray-600 mx-auto mb-2"></i>
+                                <p class="text-sm text-gray-500">Vista previa disponible en</p>
+                                <p class="text-xs text-blue-400 font-medium">Monitoreo en Vivo</p>
+                            </div>
                         </div>
                         
                         <div class="absolute top-3 left-3 flex items-center space-x-2 bg-green-900/80 backdrop-blur-sm px-3 py-1 rounded-lg">

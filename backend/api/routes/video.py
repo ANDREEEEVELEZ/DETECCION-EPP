@@ -1,13 +1,16 @@
 """
 Rutas de Video Streaming
 """
-from fastapi import APIRouter, Response, HTTPException
+from fastapi import APIRouter, Response, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 import cv2
 import time
 import sys
 import os
+import uuid
+import shutil
+from pathlib import Path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from backend.core.camera_config import camera_manager
 
@@ -15,6 +18,13 @@ router = APIRouter()
 
 # Diccionario para cámaras activas
 active_cameras = {}
+
+# Diccionario para videos en procesamiento
+active_videos = {}
+
+# Directorio temporal para videos
+TEMP_VIDEO_DIR = Path("backend/temp_videos")
+TEMP_VIDEO_DIR.mkdir(exist_ok=True)
 
 # Detector EPP global (se carga bajo demanda)
 epp_detector = None
@@ -310,3 +320,235 @@ async def get_alerts_history(limit: int = 50, tipo: str = None, camera_id: int =
         return {"success": False, "alerts": [], "error": str(e)}
     finally:
         db.close()
+
+
+# ==================== PROCESAMIENTO DE VIDEOS ====================
+
+@router.post("/videos/upload")
+async def upload_video(file: UploadFile = File(...)):
+    """Recibe un video para procesamiento temporal"""
+    try:
+        # Validar extensión
+        allowed_extensions = ['.mp4', '.avi', '.mov', '.mkv']
+        file_extension = Path(file.filename).suffix.lower()
+        
+        if file_extension not in allowed_extensions:
+            raise HTTPException(status_code=400, detail=f"Formato no soportado. Use: {', '.join(allowed_extensions)}")
+        
+        # Generar ID único para el video
+        video_id = str(uuid.uuid4())
+        video_path = TEMP_VIDEO_DIR / f"{video_id}{file_extension}"
+        
+        # Guardar archivo temporalmente
+        with video_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Obtener información del video
+        cap = cv2.VideoCapture(str(video_path))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        duration = total_frames / fps if fps > 0 else 0
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+        
+        # Almacenar en diccionario de videos activos
+        active_videos[video_id] = {
+            'path': str(video_path),
+            'filename': file.filename,
+            'total_frames': total_frames,
+            'fps': fps,
+            'duration': duration,
+            'width': width,
+            'height': height,
+            'stats': {
+                'frames_procesados': 0,
+                'detecciones_totales': 0,
+                'personas_detectadas': 0,
+                'epp_incorrecto': 0
+            }
+        }
+        
+        print(f"[VIDEO UPLOAD] {file.filename} guardado como {video_id} ({duration:.1f}s, {total_frames} frames)")
+        
+        return {
+            "success": True,
+            "video_id": video_id,
+            "filename": file.filename,
+            "duration": round(duration, 2),
+            "total_frames": total_frames,
+            "fps": round(fps, 2),
+            "resolution": f"{width}x{height}"
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Upload video: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/videos/stream/{video_id}")
+async def stream_video_with_detection(video_id: str):
+    """Stream de video con detección EPP en tiempo real"""
+    
+    if video_id not in active_videos:
+        raise HTTPException(status_code=404, detail="Video no encontrado")
+    
+    def generate_video_frames():
+        global epp_detector
+        
+        video_info = active_videos.get(video_id)
+        if not video_info:
+            print(f"[ERROR] Video {video_id} no encontrado en active_videos")
+            return
+            
+        video_path = video_info['path']
+        print(f"[VIDEO] Iniciando stream para: {video_info['filename']}")
+        
+        # Cargar detector si no existe
+        if epp_detector is None:
+            try:
+                print("[INFO] Cargando modelo EPP para procesamiento de video...")
+                import sys
+                import os
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+                sys.path.insert(0, project_root)
+                from backend.core.epp_detector import EPPDetector
+                epp_detector = EPPDetector()
+                print("[INFO] Modelo EPP cargado exitosamente para video")
+            except Exception as e:
+                print(f"[ERROR] Error cargando modelo EPP: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        cap = cv2.VideoCapture(video_path)
+        
+        if not cap.isOpened():
+            print(f"[ERROR] No se pudo abrir video: {video_path}")
+            return
+            
+        frame_count = 0
+        
+        try:
+            while True:
+                ret, frame = cap.read()
+                
+                if not ret:
+                    # Video terminado
+                    print(f"[VIDEO] Procesamiento completado: {video_info['filename']}")
+                    break
+                
+                frame_count += 1
+                
+                try:
+                    # Procesar con detector EPP si está disponible
+                    if epp_detector is not None:
+                        frame, detections, compliance = epp_detector.process_frame(frame, draw=True)
+                        
+                        # Actualizar estadísticas
+                        video_info['stats']['frames_procesados'] = frame_count
+                        if detections:
+                            video_info['stats']['detecciones_totales'] += len(detections)
+                            video_info['stats']['personas_detectadas'] = len(detections)
+                            if compliance['estado'] != 'C':
+                                video_info['stats']['epp_incorrecto'] += 1
+                        else:
+                            video_info['stats']['personas_detectadas'] = 0
+                        
+                        # Info de progreso en el frame
+                        progress = (frame_count / video_info['total_frames']) * 100 if video_info['total_frames'] > 0 else 0
+                        cv2.putText(frame, f"Progreso: {progress:.1f}% | Frame: {frame_count}/{video_info['total_frames']}", 
+                                  (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                        
+                        # Contador de personas detectadas
+                        cv2.putText(frame, f"Personas: {len(detections)} | EPP Incorrecto: {video_info['stats']['epp_incorrecto']}", 
+                                  (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                    else:
+                        # Si no hay detector, solo actualizar contador
+                        video_info['stats']['frames_procesados'] = frame_count
+                        cv2.putText(frame, "Cargando modelo EPP...", 
+                                  (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                    
+                except Exception as e:
+                    print(f"[ERROR] Error procesando frame {frame_count}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                
+                # Codificar frame
+                ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                
+                if not ret:
+                    print(f"[ERROR] No se pudo codificar frame {frame_count}")
+                    continue
+                
+                frame_bytes = buffer.tobytes()
+                
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                
+                # Control de FPS (aproximado para procesamiento)
+                time.sleep(1/30)  # ~30 FPS
+                
+        except Exception as e:
+            print(f"[ERROR] Error en stream de video: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            cap.release()
+            print(f"[VIDEO] Stream finalizado para {video_id}")
+    
+    return StreamingResponse(
+        generate_video_frames(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
+@router.get("/videos/stats/{video_id}")
+async def get_video_stats(video_id: str):
+    """Obtiene estadísticas del video en procesamiento"""
+    
+    if video_id not in active_videos:
+        raise HTTPException(status_code=404, detail="Video no encontrado")
+    
+    video_info = active_videos[video_id]
+    stats = video_info['stats']
+    
+    progress = (stats['frames_procesados'] / video_info['total_frames']) * 100 if video_info['total_frames'] > 0 else 0
+    
+    return {
+        "success": True,
+        "video_id": video_id,
+        "filename": video_info['filename'],
+        "progress": round(progress, 2),
+        "frames_procesados": stats['frames_procesados'],
+        "total_frames": video_info['total_frames'],
+        "detecciones_totales": stats['detecciones_totales'],
+        "personas_detectadas": stats['personas_detectadas'],
+        "epp_incorrecto": stats['epp_incorrecto'],
+        "duracion": video_info['duration'],
+        "fps": video_info['fps']
+    }
+
+
+@router.delete("/videos/{video_id}")
+async def delete_video(video_id: str):
+    """Elimina un video temporal"""
+    
+    if video_id not in active_videos:
+        raise HTTPException(status_code=404, detail="Video no encontrado")
+    
+    try:
+        video_path = Path(active_videos[video_id]['path'])
+        
+        # Eliminar archivo
+        if video_path.exists():
+            video_path.unlink()
+            print(f"[VIDEO] Archivo eliminado: {video_path}")
+        
+        # Remover del diccionario
+        del active_videos[video_id]
+        
+        return {"success": True, "message": "Video eliminado"}
+        
+    except Exception as e:
+        print(f"[ERROR] Error eliminando video: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

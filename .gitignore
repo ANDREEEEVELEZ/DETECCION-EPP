@@ -43,3 +43,11 @@ static/snapshots/
 *.jpg
 *.png
 !backend/static/images/
+
+# Videos temporales
+backend/temp_videos/
+temp_videos/
+*.mp4
+*.avi
+*.mov
+*.mkv

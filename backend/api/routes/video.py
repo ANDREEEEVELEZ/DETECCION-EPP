@@ -92,6 +92,10 @@ def generate_frames(camera_id: int, enable_detection: bool = False):
     
     print(f"[VIDEO] Iniciando streaming para camera_id={camera_id} (detección={'ON' if enable_detection else 'OFF'})")
     
+    # Contador de frames para no guardar cada frame (solo cada 30 frames = ~1 seg)
+    frame_count = 0
+    last_alert_time = 0
+    
     while True:
         success, frame = camera.read()
         if not success:
@@ -102,6 +106,27 @@ def generate_frames(camera_id: int, enable_detection: bool = False):
         if enable_detection and epp_detector is not None:
             try:
                 frame, detections, compliance = epp_detector.process_frame(frame, draw=True)
+                
+                # Guardar detección y generar alerta solo cada 30 frames y si hay incumplimiento
+                frame_count += 1
+                current_time = time.time()
+                
+                if frame_count % 30 == 0 and compliance['estado'] != 'C':
+                    # Evitar spam de alertas (mínimo 5 segundos entre alertas de la misma cámara)
+                    if current_time - last_alert_time > 5:
+                        try:
+                            from backend.core.alert_manager import alert_manager
+                            
+                            # Guardar detección en BD
+                            deteccion_id = alert_manager.save_detection(camera_id, detections, compliance)
+                            
+                            # Generar alerta
+                            if deteccion_id:
+                                alert_manager.generate_alert(camera_id, deteccion_id, compliance)
+                                last_alert_time = current_time
+                        except Exception as e:
+                            print(f"[ERROR] Error guardando detección/alerta: {e}")
+                
             except Exception as e:
                 print(f"[ERROR] Error en detección EPP: {e}")
         
@@ -229,3 +254,17 @@ async def shutdown_event():
         if cam is not None:
             cam.release()
     active_cameras.clear()
+
+@router.get("/alerts/recent")
+async def get_recent_alerts(limit: int = 10):
+    """Obtiene las alertas más recientes"""
+    from backend.core.alert_manager import alert_manager
+    alertas = alert_manager.get_recent_alerts(limit=limit)
+    return {"success": True, "alerts": alertas}
+
+@router.get("/alerts/count")
+async def get_alerts_count(estado: str = "pendiente"):
+    """Obtiene el conteo de alertas por estado"""
+    from backend.core.alert_manager import alert_manager
+    count = alert_manager.get_alerts_count(estado=estado)
+    return {"success": True, "count": count}

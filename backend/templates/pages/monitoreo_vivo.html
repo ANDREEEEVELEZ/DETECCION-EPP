@@ -9,8 +9,12 @@
     vistaActual: 'individual',
     camaras: [],
     selectedCamera: null,
+    detectionEnabled: true,
     getCamaraActual() {
         return this.camaras.find(c => c.id === this.selectedCamera) || this.camaras[0];
+    },
+    getStreamUrl(cameraId) {
+        return '/api/stream/' + cameraId + (this.detectionEnabled ? '?detect=true' : '');
     },
     async loadCameras() {
         try {
@@ -71,6 +75,21 @@
                     cámaras activas
                 </span>
             </div>
+            
+            <!-- Toggle Detección EPP -->
+            <div class="flex items-center space-x-3 px-4 py-2 bg-gray-800 rounded-lg border-2" 
+                 :class="detectionEnabled ? 'border-green-500' : 'border-gray-700'">
+                <i data-lucide="scan-line" class="w-4 h-4" :class="detectionEnabled ? 'text-green-400' : 'text-gray-500'"></i>
+                <span class="text-sm font-medium" :class="detectionEnabled ? 'text-green-400' : 'text-gray-400'">
+                    Detección EPP
+                </span>
+                <button @click="detectionEnabled = !detectionEnabled; setTimeout(() => location.reload(), 100)" 
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                        :class="detectionEnabled ? 'bg-green-600' : 'bg-gray-600'">
+                    <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                          :class="detectionEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                </button>
+            </div>
         </div>
         
         <!-- Botones de acción -->
@@ -125,7 +144,8 @@
                 <div class="relative aspect-video bg-gray-900">
                     <!-- Stream de video real -->
                     <img x-show="camaras.length > 0 && getCamaraActual()" 
-                         :src="'/api/stream/' + getCamaraActual().id" 
+                         :src="getStreamUrl(getCamaraActual().id)" 
+                         :key="detectionEnabled"
                          class="w-full h-full object-cover"
                          alt="Stream de cámara"
                          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
@@ -176,7 +196,8 @@
                     <div @click="selectedCamera = camara.id; vistaActual = 'individual'" class="bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden hover:border-blue-600 transition-all cursor-pointer">
                         <div class="relative aspect-video bg-gray-900">
                             <!-- Stream de video -->
-                            <img :src="'/api/stream/' + camara.id"
+                            <img :src="getStreamUrl(camara.id)"
+                                 :key="detectionEnabled + '-' + camara.id"
                                  class="w-full h-full object-cover"
                                  alt="Stream de cámara"
                                  onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
@@ -212,7 +233,8 @@
                     <div @click="selectedCamera = camara.id; vistaActual = 'individual'" class="bg-[#1E293B] border border-gray-800 rounded-lg overflow-hidden hover:border-blue-600 transition-all cursor-pointer">
                         <div class="relative aspect-video bg-gray-900">
                             <!-- Stream de video -->
-                            <img :src="'/api/stream/' + camara.id"
+                            <img :src="getStreamUrl(camara.id)"
+                                 :key="detectionEnabled + '-' + camara.id"
                                  class="w-full h-full object-cover"
                                  alt="Stream de cámara"
                                  onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">

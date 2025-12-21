@@ -5,7 +5,38 @@
 {% block page_title %}Historial de Alertas{% endblock %}
 
 {% block content %}
-<div x-data="{ tipoFiltro: 'todas' }">
+<div x-data="{ 
+    tipoFiltro: 'todas',
+    alertas: [],
+    camaras: [],
+    async loadAlertas() {
+        try {
+            const response = await fetch('/api/alerts/history?limit=100&tipo=' + this.tipoFiltro);
+            const data = await response.json();
+            this.alertas = data.alerts || [];
+            console.log('Alertas cargadas:', this.alertas.length);
+        } catch (error) {
+            console.error('Error cargando alertas:', error);
+        }
+    },
+    async loadCameras() {
+        try {
+            const response = await fetch('/api/cameras/configured');
+            const data = await response.json();
+            this.camaras = data.cameras || [];
+        } catch (error) {
+            console.error('Error cargando cámaras:', error);
+        }
+    },
+    init() {
+        this.loadCameras();
+        this.loadAlertas();
+    },
+    filtrarPorTipo(tipo) {
+        this.tipoFiltro = tipo;
+        this.loadAlertas();
+    }
+}" x-init="init()">
     <!-- Filtros -->
     <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6 mb-6">
         <p class="text-sm text-gray-400 mb-4">Supervisión de cumplimiento de EPP - Proyecto Torre Norte</p>
@@ -42,28 +73,22 @@
         <!-- Tipo de Incidencia -->
         <div class="flex items-center space-x-3">
             <span class="text-sm text-gray-400">Tipo de Incidencia:</span>
-            <button @click="tipoFiltro = 'todas'" 
+            <button @click="filtrarPorTipo('todas')" 
                     :class="tipoFiltro === 'todas' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
                     class="px-4 py-2 rounded-lg text-sm font-medium transition-all">
                 Todas
             </button>
-            <button @click="tipoFiltro = 'casco'" 
+            <button @click="filtrarPorTipo('casco')" 
                     :class="tipoFiltro === 'casco' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
                     class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2">
                 <span class="w-2 h-2 bg-red-500 rounded-full"></span>
                 <span>Sin Casco</span>
             </button>
-            <button @click="tipoFiltro = 'chaleco'" 
+            <button @click="filtrarPorTipo('chaleco')" 
                     :class="tipoFiltro === 'chaleco' ? 'bg-orange-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
                     class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2">
                 <span class="w-2 h-2 bg-orange-500 rounded-full"></span>
                 <span>Chaleco Faltante</span>
-            </button>
-            <button @click="tipoFiltro = 'zona'" 
-                    :class="tipoFiltro === 'zona' ? 'bg-yellow-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
-                    class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2">
-                <span class="w-2 h-2 bg-yellow-500 rounded-full"></span>
-                <span>Zona Restringida</span>
             </button>
             <button class="ml-auto px-4 py-2 bg-gray-800 text-gray-400 hover:bg-gray-700 rounded-lg text-sm font-medium transition-all">
                 + Más filtros
@@ -73,50 +98,96 @@
     
     <!-- Lista de alertas -->
     <div class="space-y-4">
-        <!-- Alerta 1: Sin Casco - Alta Prioridad -->
-        <div class="bg-[#1E293B] border-l-4 border-red-500 rounded-xl p-6 hover:bg-[#2D3748] transition-all">
-            <div class="flex items-start space-x-6">
-                <!-- Imagen -->
-                <div class="w-48 h-32 bg-gray-900 rounded-lg flex-shrink-0 overflow-hidden relative">
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <i data-lucide="image" class="w-12 h-12 text-gray-700"></i>
-                    </div>
-                    <div class="absolute top-2 left-2 bg-red-600 text-white px-2 py-1 rounded text-xs font-bold">
-                        ALTA PRIORIDAD
-                    </div>
-                    <div class="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
-                        CAM: 82 - NORTE
-                    </div>
-                </div>
-                
-                <!-- Info -->
-                <div class="flex-1">
-                    <div class="flex items-start justify-between mb-3">
-                        <div>
-                            <div class="flex items-center space-x-3 mb-2">
-                                <span class="w-2 h-2 bg-red-500 rounded-full"></span>
-                                <h3 class="text-lg font-semibold text-white">Ausencia de Casco</h3>
-                            </div>
-                            <p class="text-sm text-blue-400 mb-2">ID Alerta: #AL-88392</p>
+        <!-- Sin alertas -->
+        <div x-show="alertas.length === 0" class="bg-[#1E293B] border border-gray-800 rounded-xl p-12 text-center">
+            <i data-lucide="bell-off" class="w-16 h-16 text-gray-700 mx-auto mb-4"></i>
+            <p class="text-gray-400 text-lg">No se encontraron alertas</p>
+            <p class="text-gray-500 text-sm mt-2">Intenta cambiar los filtros o el rango de fechas</p>
+        </div>
+        
+        <!-- Alertas dinámicas desde BD -->
+        <template x-for="alerta in alertas" :key="alerta.id">
+            <div class="bg-[#1E293B] rounded-xl p-6 hover:bg-[#2D3748] transition-all border-l-4"
+                 :class="{
+                     'border-red-500': alerta.severidad === 'critica',
+                     'border-orange-500': alerta.severidad === 'alta',
+                     'border-yellow-500': alerta.severidad === 'media',
+                     'border-blue-500': alerta.severidad === 'baja'
+                 }">
+                <div class="flex items-start space-x-6">
+                    <!-- Imagen -->
+                    <div class="w-48 h-32 bg-gray-900 rounded-lg flex-shrink-0 overflow-hidden relative">
+                        <img x-show="alerta.imagen_path" :src="'/' + alerta.imagen_path" class="w-full h-full object-cover">
+                        <div x-show="!alerta.imagen_path" class="absolute inset-0 flex items-center justify-center">
+                            <i data-lucide="image" class="w-12 h-12 text-gray-700"></i>
                         </div>
-                        <div class="text-right">
-                            <p class="text-sm font-semibold text-white">Hoy, 14:32 PM</p>
-                            <p class="text-xs text-gray-400">Hace 15 min</p>
+                        <div class="absolute top-2 left-2 px-2 py-1 rounded text-xs font-bold text-white uppercase"
+                             :class="{
+                                 'bg-red-600': alerta.severidad === 'critica',
+                                 'bg-orange-600': alerta.severidad === 'alta',
+                                 'bg-yellow-600': alerta.severidad === 'media',
+                                 'bg-blue-600': alerta.severidad === 'baja'
+                             }"
+                             x-text="alerta.severidad">
+                        </div>
+                        <div class="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs"
+                             x-text="alerta.camera_nombre">
                         </div>
                     </div>
                     
-                    <div class="grid grid-cols-3 gap-6 mb-4">
-                        <div>
-                            <p class="text-xs text-gray-400 mb-1">UBICACIÓN</p>
-                            <p class="text-sm font-medium text-white">Acceso Norte ⚐</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-gray-400 mb-1">CONFIANZA IA</p>
-                            <div class="flex items-center space-x-2">
-                                <div class="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
-                                    <div class="h-full bg-red-500" style="width: 88.5%"></div>
+                    <!-- Info -->
+                    <div class="flex-1">
+                        <div class="flex items-start justify-between mb-3">
+                            <div>
+                                <div class="flex items-center space-x-3 mb-2">
+                                    <span class="w-2 h-2 rounded-full"
+                                          :class="{
+                                              'bg-red-500': alerta.severidad === 'critica',
+                                              'bg-orange-500': alerta.severidad === 'alta',
+                                              'bg-yellow-500': alerta.severidad === 'media',
+                                              'bg-blue-500': alerta.severidad === 'baja'
+                                          }"></span>
+                                    <h3 class="text-lg font-semibold text-white" x-text="alerta.mensaje"></h3>
                                 </div>
-                                <span class="text-sm font-semibold text-white">88.5% ⚠</span>
+                                <p class="text-sm text-blue-400 mb-2" x-text="'ID Alerta: #AL-' + alerta.id"></p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm font-semibold text-white" x-text="alerta.fecha + ', ' + alerta.timestamp"></p>
+                                <p class="text-xs text-gray-400" x-text="'Estado: ' + alerta.estado"></p>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-6 mb-4">
+                            <div>
+                                <p class="text-xs text-gray-400 mb-1">UBICACIÓN</p>
+                                <p class="text-sm font-medium text-white" x-text="alerta.zona"></p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-400 mb-1">ESTADO</p>
+                                <span class="px-2 py-1 rounded text-xs font-bold"
+                                      :class="{
+                                          'bg-red-900/30 text-red-400': alerta.estado === 'pendiente',
+                                          'bg-yellow-900/30 text-yellow-400': alerta.estado === 'revisada',
+                                          'bg-green-900/30 text-green-400': alerta.estado === 'resuelta'
+                                      }"
+                                      x-text="alerta.estado.toUpperCase()">
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between pt-4 border-t border-gray-800">
+                            <button class="text-sm text-gray-400 hover:text-white transition-all">
+                                Marcar Falso Positivo
+                            </button>
+                            <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-all flex items-center space-x-2">
+                                <span>Ver Evidencia</span>
+                                <i data-lucide="external-link" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
                             </div>
                         </div>
                         <div>

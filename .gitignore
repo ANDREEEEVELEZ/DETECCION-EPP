@@ -36,3 +36,10 @@ Thumbs.db
 # Archivos temporales
 *.tmp
 *.temp
+
+# Snapshots de detecciones EPP (generados automáticamente)
+backend/static/snapshots/
+static/snapshots/
+*.jpg
+*.png
+!backend/static/images/

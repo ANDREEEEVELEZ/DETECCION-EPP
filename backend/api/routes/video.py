@@ -117,8 +117,8 @@ def generate_frames(camera_id: int, enable_detection: bool = False):
                         try:
                             from backend.core.alert_manager import alert_manager
                             
-                            # Guardar detección en BD
-                            deteccion_id = alert_manager.save_detection(camera_id, detections, compliance)
+                            # Guardar detección en BD con snapshot
+                            deteccion_id = alert_manager.save_detection(camera_id, detections, compliance, frame=frame)
                             
                             # Generar alerta
                             if deteccion_id:
@@ -268,3 +268,45 @@ async def get_alerts_count(estado: str = "pendiente"):
     from backend.core.alert_manager import alert_manager
     count = alert_manager.get_alerts_count(estado=estado)
     return {"success": True, "count": count}
+
+@router.get("/alerts/history")
+async def get_alerts_history(limit: int = 50, tipo: str = None, camera_id: int = None):
+    """Obtiene historial completo de alertas con filtros"""
+    from backend.core.alert_manager import alert_manager
+    db = alert_manager._get_db()
+    try:
+        from backend.core.database import Alerta
+        
+        query = db.query(Alerta).order_by(Alerta.timestamp.desc())
+        
+        # Aplicar filtros
+        if tipo and tipo != 'todas':
+            query = query.filter(Alerta.tipo.contains(tipo))
+        
+        if camera_id:
+            query = query.filter(Alerta.camera_id == camera_id)
+        
+        alertas = query.limit(limit).all()
+        
+        result = []
+        for alerta in alertas:
+            result.append({
+                'id': alerta.id,
+                'camera_id': alerta.camera_id,
+                'camera_nombre': alerta.camera.nombre if alerta.camera else 'Desconocida',
+                'zona': alerta.camera.zona if alerta.camera else '',
+                'timestamp': alerta.timestamp.strftime('%H:%M %p') if alerta.timestamp else '',
+                'fecha': alerta.timestamp.strftime('%d/%m/%Y') if alerta.timestamp else '',
+                'tipo': alerta.tipo,
+                'severidad': alerta.severidad,
+                'mensaje': alerta.mensaje,
+                'estado': alerta.estado,
+                'imagen_path': alerta.deteccion.imagen_path if alerta.deteccion and alerta.deteccion.imagen_path else None
+            })
+        
+        return {"success": True, "alerts": result}
+    except Exception as e:
+        print(f"[ERROR] Error en historial: {e}")
+        return {"success": False, "alerts": [], "error": str(e)}
+    finally:
+        db.close()

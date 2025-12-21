@@ -21,7 +21,7 @@ class AlertManager:
         """Obtiene sesión de base de datos"""
         return SessionLocal()
     
-    def save_detection(self, camera_id: int, detections: List[Dict], compliance: Dict) -> int:
+    def save_detection(self, camera_id: int, detections: List[Dict], compliance: Dict, frame=None) -> int:
         """
         Guarda una detección en la base de datos
         
@@ -29,19 +29,45 @@ class AlertManager:
             camera_id: ID de la cámara
             detections: Lista de detecciones del detector EPP
             compliance: Resultado de clasificación de cumplimiento
+            frame: Frame de imagen (opcional, para guardar snapshot)
             
         Returns:
             ID de la detección guardada
         """
         db = self._get_db()
         try:
+            # Guardar imagen si se proporcionó frame y hay incumplimiento
+            imagen_path = None
+            if frame is not None and compliance['estado'] != 'C':
+                import cv2
+                import os
+                from datetime import datetime
+                
+                # Crear carpeta de snapshots si no existe (ruta absoluta)
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                snapshots_dir = os.path.join(project_root, "backend", "static", "snapshots")
+                os.makedirs(snapshots_dir, exist_ok=True)
+                
+                # Generar nombre de archivo con timestamp
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"cam{camera_id}_{timestamp}.jpg"
+                full_path = os.path.join(snapshots_dir, filename)
+                
+                # Guardar imagen
+                cv2.imwrite(full_path, frame)
+                
+                # Guardar ruta relativa para la BD (para servir vía /static/)
+                imagen_path = f"static/snapshots/{filename}"
+                print(f"[ALERT] Snapshot guardado: {full_path}")
+            
             # Crear registro de detección principal
             deteccion = Deteccion(
                 camera_id=camera_id,
                 trabajador_id=None,  # Por ahora sin reconocimiento de trabajador
                 timestamp=datetime.now(),
                 estado_epp=compliance['estado'],
-                observaciones=compliance['mensaje']
+                observaciones=compliance['mensaje'],
+                imagen_path=imagen_path
             )
             
             db.add(deteccion)

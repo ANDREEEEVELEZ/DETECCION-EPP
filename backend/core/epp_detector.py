@@ -115,14 +115,14 @@ class EPPDetector:
     
     def classify_compliance(self, detections: List[Dict]) -> Dict:
         """
-        Clasifica el cumplimiento de EPP en: Correcto (C), Incorrecto (I), No uso (N)
+        Clasifica el cumplimiento de EPP en: Correcto (C), Incorrecto (I), No uso (N), Sin Persona (P)
         
         Args:
             detections: Lista de detecciones del método detect()
             
         Returns:
             {
-                'estado': 'C' | 'I' | 'N',
+                'estado': 'C' | 'I' | 'N' | 'P',
                 'score': float (0-100),
                 'epp_status': {
                     'casco': bool,
@@ -131,13 +131,33 @@ class EPPDetector:
                     'botas': bool,
                     'gafas': bool
                 },
-                'mensaje': str
+                'mensaje': str,
+                'person_detected': bool
             }
         """
-        # Inicializar estado de cada EPP
+        # PASO 1: Verificar si hay persona detectada
+        # Persona se detecta si:
+        # 1. Hay clase "Person" o "persona" explícita, O
+        # 2. Hay CUALQUIER detección de EPP (con o sin EPP)
+        person_detected = (
+            any(det['epp_type'] == 'persona' for det in detections) or
+            len(detections) > 0  # Si hay cualquier detección, asumimos persona presente
+        )
+        
+        # Si NO hay detecciones, retornar estado especial (no alertar)
+        if not person_detected:
+            return {
+                'estado': 'P',  # P = Sin Persona (no alertar)
+                'score': 0,
+                'epp_status': {epp: False for epp in self.epp_types},
+                'mensaje': 'Área vacía',
+                'person_detected': False
+            }
+        
+        # PASO 2: Si HAY persona, evaluar EPP
         epp_status = {epp: False for epp in self.epp_types}
         
-        # Revisar detecciones
+        # Revisar detecciones de EPP
         for det in detections:
             epp_type = det['epp_type']
             has_epp = det['has_epp']
@@ -169,7 +189,8 @@ class EPPDetector:
             'estado': estado,
             'score': score,
             'epp_status': epp_status,
-            'mensaje': mensaje
+            'mensaje': mensaje,
+            'person_detected': True
         }
     
     def draw_detections(self, frame: np.ndarray, detections: List[Dict], compliance: Dict) -> np.ndarray:
@@ -223,9 +244,13 @@ class EPPDetector:
         estado = compliance['estado']
         score = compliance['score']
         mensaje = compliance['mensaje']
+        person_detected = compliance.get('person_detected', False)
         
         # Color del panel según estado
-        if estado == 'C':
+        if estado == 'P':
+            # Sin persona - Gris/Azul (estado neutro)
+            panel_color = (180, 180, 180)  # Gris claro
+        elif estado == 'C':
             panel_color = COLOR_CORRECTO
         elif estado == 'I':
             panel_color = COLOR_ADVERTENCIA

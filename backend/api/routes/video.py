@@ -84,6 +84,7 @@ def generate_frames(camera_id: int, enable_detection: bool = False):
     # Cargar detector si está habilitada la detección
     if enable_detection and epp_detector is None:
         try:
+            print("=" * 60)
             print("[INFO] Cargando modelo EPP por primera vez...")
             # Import relativo desde la estructura del proyecto
             import sys
@@ -94,6 +95,8 @@ def generate_frames(camera_id: int, enable_detection: bool = False):
             from backend.core.epp_detector import EPPDetector
             epp_detector = EPPDetector(model_path="models/best.pt")
             print("[INFO] Modelo EPP cargado exitosamente")
+            print(f"[INFO] Modelo de pose disponible: {epp_detector.pose_model is not None}")
+            print("=" * 60)
         except Exception as e:
             print(f"[ERROR] No se pudo cargar modelo EPP: {e}")
             import traceback
@@ -115,7 +118,17 @@ def generate_frames(camera_id: int, enable_detection: bool = False):
         # Procesar con detector EPP si está habilitado
         if enable_detection and epp_detector is not None:
             try:
+                # DEBUG: Mostrar info de detección cada 60 frames
+                if frame_count % 60 == 0:
+                    print(f"[DEBUG] Frame {frame_count}: Modelo pose disponible: {epp_detector.pose_model is not None}")
+                
                 frame, detections, compliance = epp_detector.process_frame(frame, draw=True)
+                
+                # DEBUG: Mostrar detecciones con posicionamiento cada 60 frames
+                if frame_count % 60 == 0 and len(detections) > 0:
+                    print(f"[DEBUG] Detecciones: {len(detections)}")
+                    for det in detections:
+                        print(f"  - {det['epp_type']}: has_epp={det['has_epp']}, correctly_positioned={det.get('correctly_positioned', 'N/A')}")
                 
                 # Guardar detección y generar alerta solo cada 30 frames y si hay incumplimiento
                 frame_count += 1

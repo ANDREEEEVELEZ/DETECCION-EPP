@@ -29,6 +29,23 @@ TEMP_VIDEO_DIR.mkdir(exist_ok=True)
 # Detector EPP global (se carga bajo demanda)
 epp_detector = None
 
+
+def _open_camera_capture(physical_id: int):
+    """Intenta abrir una cámara con distintos backends para mayor compatibilidad."""
+    attempts = [
+        ("DSHOW", cv2.CAP_DSHOW),
+        ("AUTO", None),
+    ]
+
+    for backend_name, backend in attempts:
+        cap = cv2.VideoCapture(physical_id, backend) if backend is not None else cv2.VideoCapture(physical_id)
+        if cap.isOpened():
+            print(f"[VIDEO] Cámara física ID={physical_id} abierta con backend {backend_name}")
+            return cap
+        cap.release()
+
+    return None
+
 class CameraAddRequest(BaseModel):
     physical_id: int
     nombre: str
@@ -52,8 +69,8 @@ def get_camera(camera_id: int):
     
     print(f"[VIDEO] Intentando abrir cámara física ID={physical_id} (Camera DB ID={camera_id})")
     
-    # Crear nueva instancia de cámara
-    cap = cv2.VideoCapture(physical_id, cv2.CAP_DSHOW)
+    # Crear nueva instancia de cámara con fallback de backend
+    cap = _open_camera_capture(physical_id)
     
     if not cap.isOpened():
         print(f"[VIDEO ERROR] No se pudo abrir cámara física ID={physical_id}. Puede estar en uso por otra aplicación.")
@@ -192,7 +209,10 @@ async def list_physical_cameras():
     
     # Detectar cámaras físicas disponibles (IDs 0-10)
     for cam_id in range(11):
-        cap = cv2.VideoCapture(cam_id, cv2.CAP_DSHOW)
+        cap = _open_camera_capture(cam_id)
+        if cap is None:
+            continue
+
         if cap.isOpened():
             # Obtener información de la cámara
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))

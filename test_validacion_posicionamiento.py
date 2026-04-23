@@ -31,7 +31,7 @@ def test_with_webcam():
     print("=" * 60)
     
     # Inicializar detector
-    detector = EPPDetector(model_path='models/best.pt', conf_threshold=0.25)
+    detector = EPPDetector(model_path='models/best 22042026V1.pt', conf_threshold=0.25)
     
     # Abrir webcam
     cap = cv2.VideoCapture(0)
@@ -93,7 +93,7 @@ def test_with_image(image_path: str):
     print("=" * 60)
     
     # Inicializar detector
-    detector = EPPDetector(model_path='models/best.pt', conf_threshold=0.25)
+    detector = EPPDetector(model_path='models/best 22042026V1.pt', conf_threshold=0.25)
     
     # Cargar imagen
     frame = cv2.imread(image_path)

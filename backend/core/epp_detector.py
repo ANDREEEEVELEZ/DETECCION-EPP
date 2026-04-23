@@ -6,8 +6,13 @@ import numpy as np
 from ultralytics import YOLO
 from typing import List, Dict, Tuple, Optional
 
+
+def _normalize_label(label: str) -> str:
+    """Normaliza etiquetas de clase para mapeo robusto."""
+    return label.strip().lower().replace('-', '_').replace(' ', '_')
+
 class EPPDetector:
-    def __init__(self, model_path: str = "models/best.pt", conf_threshold: float = 0.25):
+    def __init__(self, model_path: str = "models/best 22042026V1.pt", conf_threshold: float = 0.20):
         """
         Inicializa el detector de EPP
         
@@ -66,9 +71,25 @@ class EPPDetector:
             'NO-Mask': 'sin_mascarilla',
             'Person': 'persona'
         }
+
+        # Alias canónicos para resolver nombres de clases heterogéneos por dataset.
+        self.epp_aliases = {
+            'casco': {'casco', 'helmet', 'hardhat'},
+            'chaleco': {'chaleco', 'vest', 'safety_vest', 'safetyvest'},
+            'guantes': {'guantes', 'glove', 'gloves'},
+            'gafas': {'gafas', 'goggles', 'lentes', 'glasses'},
+            'botas': {'botas', 'bota', 'boots', 'boot', 'shoes', 'shoe', 'safety_shoes', 'safety_shoe'}
+        }
         
         # EPP requerido (5 tipos según la tesis)
         self.epp_types = ['casco', 'chaleco', 'guantes', 'botas', 'gafas']
+
+        # Detectar cobertura real del modelo para evitar falsos "faltantes".
+        self.model_supported_epp = self._detect_model_supported_epp()
+        self.model_missing_epp = [epp for epp in self.epp_types if epp not in self.model_supported_epp]
+        print(f"[EPP Detector] EPP soportado por modelo: {sorted(self.model_supported_epp)}")
+        if self.model_missing_epp:
+            print(f"[EPP Detector WARNING] EPP NO soportado por modelo: {self.model_missing_epp}")
         
         # Índices de keypoints de YOLO-Pose (COCO format)
         # 0: nose, 1: left_eye, 2: right_eye, 3: left_ear, 4: right_ear,
@@ -81,6 +102,34 @@ class EPPDetector:
             9: 'left_wrist', 10: 'right_wrist', 11: 'left_hip', 12: 'right_hip',
             13: 'left_knee', 14: 'right_knee', 15: 'left_ankle', 16: 'right_ankle'
         }
+
+    def _canonical_epp_type(self, raw_class_name: str) -> Optional[str]:
+        """Convierte un nombre de clase del modelo al tipo EPP canónico."""
+        mapped_name = self.class_mapping.get(raw_class_name, raw_class_name)
+        normalized = _normalize_label(mapped_name)
+
+        if normalized.startswith('no_'):
+            normalized = normalized[3:]
+
+        if normalized in self.epp_types:
+            return normalized
+
+        for canonical_type, aliases in self.epp_aliases.items():
+            if normalized in aliases:
+                return canonical_type
+
+        return None
+
+    def _detect_model_supported_epp(self) -> set:
+        """Inspecciona clases del modelo y devuelve tipos EPP realmente detectables."""
+        supported = set()
+
+        for _, class_name in self.model.names.items():
+            epp_type = self._canonical_epp_type(str(class_name))
+            if epp_type in self.epp_types:
+                supported.add(epp_type)
+
+        return supported
         
     def detect(self, frame: np.ndarray) -> List[Dict]:
         """
@@ -124,6 +173,9 @@ class EPPDetector:
                 # Normalizar tipo de EPP (quitar "sin_")
                 if epp_type.startswith('sin_'):
                     epp_type = epp_type.replace('sin_', '')
+
+                # Unificar con tipos canónicos para evaluación consistente.
+                epp_type = self._canonical_epp_type(epp_type) or epp_type
                 
                 detections.append({
                     'bbox': [int(x1), int(y1), int(x2), int(y2)],
@@ -522,59 +574,77 @@ class EPPDetector:
                 'person_detected': False
             }
         
-        # PASO 2: Evaluar EPP y su posicionamiento
-        epp_status = {epp: False for epp in self.epp_types}
-        epp_positioning = {epp: 'ausente' for epp in self.epp_types}
-        incorrectly_positioned_items = []
-        
-        # Revisar detecciones de EPP
+        # PASO 2: Evaluar EPP y su posicionamiento con prioridad estable por tipo
+        # Prioridad por tipo de EPP: correcto > incorrecto > ausente
+        epp_positioning = {
+            epp: ('ausente' if epp in self.model_supported_epp else 'no_evaluable_modelo')
+            for epp in self.epp_types
+        }
+
         for det in detections:
-            epp_type = det['epp_type']
-            has_epp = det['has_epp']
-            correctly_positioned = det.get('correctly_positioned', True)
-            
-            if epp_type in epp_status:
-                if has_epp:
-                    if correctly_positioned:
-                        # EPP presente Y correctamente posicionado
-                        epp_status[epp_type] = True
-                        epp_positioning[epp_type] = 'correcto'
-                    else:
-                        # EPP presente pero MAL posicionado
-                        epp_status[epp_type] = False  # NO cuenta como cumplimiento
-                        epp_positioning[epp_type] = 'incorrecto'
-                        incorrectly_positioned_items.append(epp_type)
-                else:
-                    # EPP ausente
-                    epp_positioning[epp_type] = 'ausente'
-        
-        # Contar EPP presentes Y correctamente posicionados
-        compliant_count = sum(epp_status.values())
-        total_required = len(self.epp_types)
-        
-        # Calcular score (0-100%)
-        score = (compliant_count / total_required) * 100
-        
-        # Determinar estado y mensaje
-        if compliant_count == total_required:
-            estado = 'C'  # Correcto
-            mensaje = 'EPP Completo y Correcto'
-        elif len(incorrectly_positioned_items) > 0:
-            # Hay EPP mal posicionado
-            estado = 'I'  # Incorrecto
-            missing = [epp for epp, present in epp_status.items() if not present]
-            
-            if len(missing) > 0:
-                mensaje = f'Mal puesto: {', '.join(incorrectly_positioned_items)} | Falta: {', '.join(missing)}'
+            epp_type = det.get('epp_type')
+            if epp_type not in epp_positioning or epp_type not in self.model_supported_epp:
+                continue
+
+            has_epp = bool(det.get('has_epp', False))
+            correctly_positioned = bool(det.get('correctly_positioned', True))
+            current_state = epp_positioning[epp_type]
+
+            if has_epp and correctly_positioned:
+                # Máxima prioridad: si hay al menos una detección correcta, queda en correcto.
+                epp_positioning[epp_type] = 'correcto'
+            elif has_epp and not correctly_positioned:
+                # Solo aplicar "incorrecto" si aún no hay evidencia "correcta".
+                if current_state != 'correcto':
+                    epp_positioning[epp_type] = 'incorrecto'
             else:
-                mensaje = f'EPP mal puesto: {', '.join(incorrectly_positioned_items)}'
-        elif compliant_count > 0:
-            estado = 'I'  # Incorrecto (uso parcial)
-            missing = [epp for epp, present in epp_status.items() if not present]
-            mensaje = f'Falta: {', '.join(missing)}'
-        else:
+                # Ausente explícito: no degrada un estado ya más informativo.
+                if current_state == 'ausente':
+                    epp_positioning[epp_type] = 'ausente'
+
+        epp_status = {
+            epp: (pos == 'correcto')
+            for epp, pos in epp_positioning.items()
+        }
+        evaluable_items = [epp for epp in self.epp_types if epp in self.model_supported_epp]
+        non_evaluable_items = [epp for epp in self.epp_types if epp not in self.model_supported_epp]
+        incorrectly_positioned_items = [
+            epp for epp, pos in epp_positioning.items()
+            if pos == 'incorrecto' and epp in self.model_supported_epp
+        ]
+        missing_items = [
+            epp for epp, pos in epp_positioning.items()
+            if pos == 'ausente' and epp in self.model_supported_epp
+        ]
+
+        # Contar EPP presentes y correctamente posicionados
+        compliant_count = sum(1 for epp in evaluable_items if epp_status.get(epp, False))
+        total_required = len(evaluable_items)
+
+        # Calcular score (0-100%)
+        score = (compliant_count / total_required) * 100 if total_required > 0 else 0.0
+
+        # Determinar estado general en 3 niveles solicitados
+        if total_required == 0:
+            estado = 'I'
+            mensaje = 'Modelo no tiene clases EPP evaluables'
+        elif compliant_count == total_required:
+            estado = 'C'  # Uso correcto
+            mensaje = 'EPP completo y correcto'
+        elif len(missing_items) == total_required:
             estado = 'N'  # No uso
             mensaje = 'Sin EPP'
+        else:
+            estado = 'I'  # Uso incorrecto (mal uso o incompleto)
+            message_parts = []
+            if incorrectly_positioned_items:
+                message_parts.append(f"Mal puesto: {', '.join(incorrectly_positioned_items)}")
+            if missing_items:
+                message_parts.append(f"Falta: {', '.join(missing_items)}")
+            mensaje = ' | '.join(message_parts) if message_parts else 'Uso incorrecto de EPP'
+
+        if non_evaluable_items:
+            mensaje = f"{mensaje} | No evaluable por modelo: {', '.join(non_evaluable_items)}"
         
         return {
             'estado': estado,
@@ -583,7 +653,10 @@ class EPPDetector:
             'epp_positioning': epp_positioning,
             'mensaje': mensaje,
             'person_detected': True,
-            'incorrectly_positioned': incorrectly_positioned_items
+            'incorrectly_positioned': incorrectly_positioned_items,
+            'missing_epp': missing_items,
+            'non_evaluable_epp': non_evaluable_items,
+            'evaluable_epp_count': total_required
         }
     
     def draw_detections(self, frame: np.ndarray, detections: List[Dict], compliance: Dict, pose_data: Optional[Dict] = None) -> np.ndarray:
@@ -614,6 +687,10 @@ class EPPDetector:
             has_epp = det['has_epp']
             epp_type = det['epp_type']
             correctly_positioned = det.get('correctly_positioned', True)
+
+            # Evitar dibujar clases auxiliares (por ejemplo, persona) como si fueran EPP.
+            if epp_type not in self.epp_types:
+                continue
             
             # Determinar color según estado
             if has_epp and correctly_positioned:

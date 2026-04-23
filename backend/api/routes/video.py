@@ -110,8 +110,14 @@ def generate_frames(camera_id: int, enable_detection: bool = False):
             sys.path.insert(0, project_root)
             
             from backend.core.epp_detector import EPPDetector
-            epp_detector = EPPDetector(model_path="models/best.pt")
+            model_path = os.getenv("EPP_MODEL_PATH", "models/best 22042026V1.pt")
+            conf_threshold = float(os.getenv("EPP_CONF_THRESHOLD", "0.20"))
+            epp_detector = EPPDetector(model_path=model_path, conf_threshold=conf_threshold)
             print("[INFO] Modelo EPP cargado exitosamente")
+            print(f"[INFO] Modelo de detección: {model_path}")
+            print(f"[INFO] Umbral de confianza: {conf_threshold}")
+            if getattr(epp_detector, 'model_missing_epp', None):
+                print(f"[WARNING] El modelo no soporta estos EPP: {epp_detector.model_missing_epp}")
             print(f"[INFO] Modelo de pose disponible: {epp_detector.pose_model is not None}")
             print("=" * 60)
         except Exception as e:
@@ -158,7 +164,10 @@ def generate_frames(camera_id: int, enable_detection: bool = False):
                             from backend.core.alert_manager import alert_manager
                             
                             # Guardar detección en BD con snapshot
-                            deteccion_id = alert_manager.save_detection(camera_id, detections, compliance, frame=frame)
+                            if compliance.get('estado') in ('I', 'N'):
+                                deteccion_id = alert_manager.save_detection(camera_id, detections, compliance, frame=frame)
+                            else:
+                                deteccion_id = None
                             
                             # Generar alerta
                             if deteccion_id:
@@ -398,6 +407,9 @@ async def upload_video(file: UploadFile = File(...)):
                 'frames_procesados': 0,
                 'detecciones_totales': 0,
                 'personas_detectadas': 0,
+                'uso_correcto': 0,
+                'uso_incorrecto': 0,
+                'no_uso': 0,
                 'epp_incorrecto': 0
             }
         }
@@ -482,7 +494,13 @@ async def stream_video_with_detection(video_id: str):
                         if detections:
                             video_info['stats']['detecciones_totales'] += len(detections)
                             video_info['stats']['personas_detectadas'] = len(detections)
-                            if compliance['estado'] != 'C':
+                            if compliance['estado'] == 'C':
+                                video_info['stats']['uso_correcto'] += 1
+                            elif compliance['estado'] == 'N':
+                                video_info['stats']['no_uso'] += 1
+                                video_info['stats']['epp_incorrecto'] += 1
+                            elif compliance['estado'] == 'I':
+                                video_info['stats']['uso_incorrecto'] += 1
                                 video_info['stats']['epp_incorrecto'] += 1
                         else:
                             video_info['stats']['personas_detectadas'] = 0
@@ -556,6 +574,9 @@ async def get_video_stats(video_id: str):
         "total_frames": video_info['total_frames'],
         "detecciones_totales": stats['detecciones_totales'],
         "personas_detectadas": stats['personas_detectadas'],
+        "uso_correcto": stats.get('uso_correcto', 0),
+        "uso_incorrecto": stats.get('uso_incorrecto', 0),
+        "no_uso": stats.get('no_uso', 0),
         "epp_incorrecto": stats['epp_incorrecto'],
         "duracion": video_info['duration'],
         "fps": video_info['fps']

@@ -36,6 +36,10 @@ class AlertManager:
         """
         db = self._get_db()
         try:
+            # No guardar en BD cuando no hay persona detectada.
+            if compliance.get('estado') == 'P':
+                return None
+
             # Guardar imagen si se proporcionó frame y hay incumplimiento
             imagen_path = None
             if frame is not None and compliance['estado'] != 'C':
@@ -74,39 +78,34 @@ class AlertManager:
             db.flush()  # Para obtener el ID
             
             # Guardar cada EPP detectado
+            epp_positioning = compliance.get('epp_positioning', {})
             for epp_type, present in compliance['epp_status'].items():
                 # Buscar detecciones de este tipo de EPP
                 epp_detections = [d for d in detections if d['epp_type'] == epp_type]
+                best_detection = max(epp_detections, key=lambda d: d.get('confidence', 0.0), default=None)
                 
                 tipo_epp_id = self.epp_mapping.get(epp_type)
                 if not tipo_epp_id:
                     continue
+
+                positioning_state = epp_positioning.get(epp_type, 'ausente')
+                detectado_val = 1 if positioning_state in ('correcto', 'incorrecto') else 0
+                uso_correcto_val = 1 if positioning_state == 'correcto' else 0
+                confianza_val = best_detection.get('confidence', 0.0) if best_detection else 0.0
+                bbox = best_detection.get('bbox') if best_detection else None
                 
-                if epp_detections:
-                    # Se detectó este EPP
-                    for det in epp_detections:
-                        deteccion_epp = DeteccionEPP(
-                            deteccion_id=deteccion.id,
-                            tipo_epp_id=tipo_epp_id,
-                            detectado=1 if det['has_epp'] else 0,
-                            confianza=det['confidence'],
-                            uso_correcto=1 if det['has_epp'] else 0,
-                            bbox_x=det['bbox'][0],
-                            bbox_y=det['bbox'][1],
-                            bbox_width=det['bbox'][2] - det['bbox'][0],
-                            bbox_height=det['bbox'][3] - det['bbox'][1]
-                        )
-                        db.add(deteccion_epp)
-                else:
-                    # No se detectó este EPP
-                    deteccion_epp = DeteccionEPP(
-                        deteccion_id=deteccion.id,
-                        tipo_epp_id=tipo_epp_id,
-                        detectado=0,
-                        confianza=0.0,
-                        uso_correcto=0
-                    )
-                    db.add(deteccion_epp)
+                deteccion_epp = DeteccionEPP(
+                    deteccion_id=deteccion.id,
+                    tipo_epp_id=tipo_epp_id,
+                    detectado=detectado_val,
+                    confianza=confianza_val,
+                    uso_correcto=uso_correcto_val,
+                    bbox_x=bbox[0] if bbox else None,
+                    bbox_y=bbox[1] if bbox else None,
+                    bbox_width=(bbox[2] - bbox[0]) if bbox else None,
+                    bbox_height=(bbox[3] - bbox[1]) if bbox else None
+                )
+                db.add(deteccion_epp)
             
             db.commit()
             return deteccion.id
@@ -130,8 +129,8 @@ class AlertManager:
         Returns:
             ID de la alerta generada o None
         """
-        # Solo generar alertas si el estado NO es Correcto
-        if compliance['estado'] == 'C':
+        # Solo generar alertas para incumplimientos reales (I/N)
+        if compliance.get('estado') in ('C', 'P'):
             return None
         
         db = self._get_db()
@@ -142,10 +141,13 @@ class AlertManager:
                 severidad = 'critica'
                 mensaje = 'Trabajador sin EPP detectado'
             else:  # Estado 'I'
-                # Determinar qué EPP falta
-                missing = [epp for epp, present in compliance['epp_status'].items() if not present]
-                
-                # Severidad según EPP faltante
+                missing = compliance.get('missing_epp')
+                incorrectly_positioned = compliance.get('incorrectly_positioned', [])
+
+                if missing is None:
+                    missing = [epp for epp, present in compliance['epp_status'].items() if not present]
+
+                # Severidad según faltantes/mal uso
                 if 'casco' in missing:
                     tipo = 'sin_casco'
                     severidad = 'critica'
@@ -155,11 +157,19 @@ class AlertManager:
                 elif len(missing) >= 3:
                     tipo = 'epp_multiple_faltante'
                     severidad = 'alta'
+                elif incorrectly_positioned:
+                    tipo = 'epp_mal_uso'
+                    severidad = 'media'
                 else:
                     tipo = 'epp_incorrecto'
                     severidad = 'media'
-                
-                mensaje = f"EPP incorrecto: Falta {', '.join(missing)}"
+
+                partes = []
+                if incorrectly_positioned:
+                    partes.append(f"Mal puesto: {', '.join(incorrectly_positioned)}")
+                if missing:
+                    partes.append(f"Falta: {', '.join(missing)}")
+                mensaje = "EPP incorrecto: " + (" | ".join(partes) if partes else "Uso incorrecto")
             
             # Crear alerta
             alerta = Alerta(

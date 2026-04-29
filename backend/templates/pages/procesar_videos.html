@@ -8,7 +8,7 @@
 <div class="max-w-6xl mx-auto" x-data="{
     videoId: null,
     videoInfo: null,
-    stats: { frames_procesados: 0, detecciones_totales: 0, personas_detectadas: 0, epp_incorrecto: 0, progress: 0 },
+    stats: { frames_procesados: 0, detecciones_totales: 0, frames_con_incumplimiento: 0, frames_conformes: 0, desglose_epp: {}, progress: 0 },
     isProcessing: false,
     uploading: false,
     
@@ -97,7 +97,7 @@
         if (this.statsInterval) clearInterval(this.statsInterval);
         this.videoId = null;
         this.videoInfo = null;
-        this.stats = { frames_procesados: 0, detecciones_totales: 0, personas_detectadas: 0, epp_incorrecto: 0, progress: 0 };
+        this.stats = { frames_procesados: 0, detecciones_totales: 0, frames_con_incumplimiento: 0, frames_conformes: 0, desglose_epp: {}, progress: 0 };
         this.isProcessing = false;
     }
 }">
@@ -191,48 +191,75 @@
                         <i data-lucide="film" class="w-5 h-5 text-blue-400"></i>
                     </div>
                     <div>
-                        <p class="text-xs text-gray-400">Frames Procesados</p>
-                        <p class="text-2xl font-bold text-white" x-text="stats.frames_procesados"></p>
+                        <p class="text-xs text-gray-400">Imágenes Procesadas</p>
+                        <p class="text-2xl font-bold text-white"><span x-text="stats.frames_procesados"></span>/<span x-text="videoInfo?.total_frames || 0"></span></p>
                     </div>
                 </div>
             </div>
             
-            <!-- Detecciones Totales -->
+            <!-- Frames Conformes -->
+            <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6">
+                <div class="flex items-center space-x-3 mb-2">
+                    <div class="w-10 h-10 bg-emerald-900/30 rounded-lg flex items-center justify-center">
+                        <i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-400">Imágenes Conformes</p>
+                        <p class="text-2xl font-bold text-emerald-400" x-text="stats.frames_conformes"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Frames con Incumplimiento -->
+            <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6">
+                <div class="flex items-center space-x-3 mb-2">
+                    <div class="w-10 h-10 bg-amber-900/30 rounded-lg flex items-center justify-center">
+                        <i data-lucide="alert-circle" class="w-5 h-5 text-amber-400"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-400">Imágenes con Incumplimiento</p>
+                        <p class="text-2xl font-bold text-amber-400" x-text="stats.frames_con_incumplimiento"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Detecciones EPP Totales -->
             <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6">
                 <div class="flex items-center space-x-3 mb-2">
                     <div class="w-10 h-10 bg-purple-900/30 rounded-lg flex items-center justify-center">
-                        <i data-lucide="scan" class="w-5 h-5 text-purple-400"></i>
+                        <i data-lucide="package" class="w-5 h-5 text-purple-400"></i>
                     </div>
                     <div>
-                        <p class="text-xs text-gray-400">Detecciones Totales</p>
+                        <p class="text-xs text-gray-400">Total de Detecciones EPP</p>
                         <p class="text-2xl font-bold text-white" x-text="stats.detecciones_totales"></p>
                     </div>
                 </div>
             </div>
-            
-            <!-- Personas Detectadas -->
-            <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6">
-                <div class="flex items-center space-x-3 mb-2">
-                    <div class="w-10 h-10 bg-green-900/30 rounded-lg flex items-center justify-center">
-                        <i data-lucide="users" class="w-5 h-5 text-green-400"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-400">Personas Actuales</p>
-                        <p class="text-2xl font-bold text-white" x-text="stats.personas_detectadas"></p>
-                    </div>
+        </div>
+
+        <!-- Desglose de EPP por Tipo -->
+        <div x-show="stats.desglose_epp && Object.keys(stats.desglose_epp).length > 0" class="bg-[#1E293B] border border-gray-800 rounded-xl p-6 mt-6">
+            <h3 class="text-lg font-semibold text-white mb-4">Detecciones por Tipo de EPP</h3>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div class="bg-[#0F172A] border border-gray-800 rounded-lg p-3 text-center">
+                    <p class="text-xs text-gray-400 mb-1">Casco</p>
+                    <p class="text-xl font-bold text-yellow-400" x-text="stats.desglose_epp.casco || 0"></p>
                 </div>
-            </div>
-            
-            <!-- EPP Incorrecto -->
-            <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6">
-                <div class="flex items-center space-x-3 mb-2">
-                    <div class="w-10 h-10 bg-red-900/30 rounded-lg flex items-center justify-center">
-                        <i data-lucide="alert-triangle" class="w-5 h-5 text-red-400"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-400">Detecciones EPP Incorrecto</p>
-                        <p class="text-2xl font-bold text-white" x-text="stats.epp_incorrecto"></p>
-                    </div>
+                <div class="bg-[#0F172A] border border-gray-800 rounded-lg p-3 text-center">
+                    <p class="text-xs text-gray-400 mb-1">Chaleco</p>
+                    <p class="text-xl font-bold text-orange-400" x-text="stats.desglose_epp.chaleco || 0"></p>
+                </div>
+                <div class="bg-[#0F172A] border border-gray-800 rounded-lg p-3 text-center">
+                    <p class="text-xs text-gray-400 mb-1">Guantes</p>
+                    <p class="text-xl font-bold text-blue-400" x-text="stats.desglose_epp.guantes || 0"></p>
+                </div>
+                <div class="bg-[#0F172A] border border-gray-800 rounded-lg p-3 text-center">
+                    <p class="text-xs text-gray-400 mb-1">Botas</p>
+                    <p class="text-xl font-bold text-sky-400" x-text="stats.desglose_epp.botas || 0"></p>
+                </div>
+                <div class="bg-[#0F172A] border border-gray-800 rounded-lg p-3 text-center">
+                    <p class="text-xs text-gray-400 mb-1">Gafas</p>
+                    <p class="text-xl font-bold text-emerald-400" x-text="stats.desglose_epp.gafas || 0"></p>
                 </div>
             </div>
         </div>

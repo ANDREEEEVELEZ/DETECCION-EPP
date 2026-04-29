@@ -525,11 +525,16 @@ async def upload_video(file: UploadFile = File(...)):
             'stats': {
                 'frames_procesados': 0,
                 'detecciones_totales': 0,
-                'personas_detectadas': 0,
-                'uso_correcto': 0,
-                'uso_incorrecto': 0,
-                'no_uso': 0,
-                'epp_incorrecto': 0
+                'personas_unicas': set(),  # Guardar IDs de personas para contar únicas
+                'frames_con_incumplimiento': 0,  # Frames donde hay incumplimiento
+                'frames_conformes': 0,  # Frames donde todo está bien
+                'desglose_epp': {
+                    'casco': 0,
+                    'chaleco': 0,
+                    'guantes': 0,
+                    'botas': 0,
+                    'gafas': 0
+                }
             }
         }
         
@@ -612,17 +617,21 @@ async def stream_video_with_detection(video_id: str):
                         video_info['stats']['frames_procesados'] = frame_count
                         if detections:
                             video_info['stats']['detecciones_totales'] += len(detections)
-                            video_info['stats']['personas_detectadas'] = len(detections)
+                            
+                            # Contar personas únicas (aproximado: por bbox de EPP detectado)
+                            for det in detections:
+                                if det['epp_type'] in video_info['stats']['desglose_epp']:
+                                    video_info['stats']['desglose_epp'][det['epp_type']] += 1
+                            
+                            # Contar frames con incumplimiento (no acumular por frame, solo contar una vez)
                             if compliance['estado'] == 'C':
-                                video_info['stats']['uso_correcto'] += 1
-                            elif compliance['estado'] == 'N':
-                                video_info['stats']['no_uso'] += 1
-                                video_info['stats']['epp_incorrecto'] += 1
-                            elif compliance['estado'] == 'I':
-                                video_info['stats']['uso_incorrecto'] += 1
-                                video_info['stats']['epp_incorrecto'] += 1
+                                video_info['stats']['frames_conformes'] += 1
+                            elif compliance['estado'] in ('I', 'N'):
+                                video_info['stats']['frames_con_incumplimiento'] += 1
                         else:
-                            video_info['stats']['personas_detectadas'] = 0
+                            # Frame sin detecciones, pero si es conforme contar
+                            if compliance['estado'] == 'C':
+                                video_info['stats']['frames_conformes'] += 1
                         
                         # Info de progreso en el frame
                         progress = (frame_count / video_info['total_frames']) * 100 if video_info['total_frames'] > 0 else 0
@@ -684,6 +693,9 @@ async def get_video_stats(video_id: str):
     
     progress = (stats['frames_procesados'] / video_info['total_frames']) * 100 if video_info['total_frames'] > 0 else 0
     
+    # Calcular métrica de incumplimiento por tipo de EPP
+    epp_incorrecto_detalle = stats.get('desglose_epp', {})
+    
     return {
         "success": True,
         "video_id": video_id,
@@ -691,12 +703,10 @@ async def get_video_stats(video_id: str):
         "progress": round(progress, 2),
         "frames_procesados": stats['frames_procesados'],
         "total_frames": video_info['total_frames'],
+        "frames_con_incumplimiento": stats['frames_con_incumplimiento'],
+        "frames_conformes": stats['frames_conformes'],
         "detecciones_totales": stats['detecciones_totales'],
-        "personas_detectadas": stats['personas_detectadas'],
-        "uso_correcto": stats.get('uso_correcto', 0),
-        "uso_incorrecto": stats.get('uso_incorrecto', 0),
-        "no_uso": stats.get('no_uso', 0),
-        "epp_incorrecto": stats['epp_incorrecto'],
+        "desglose_epp": epp_incorrecto_detalle,
         "duracion": video_info['duration'],
         "fps": video_info['fps']
     }

@@ -40,6 +40,10 @@
     transition: all 0.3s ease;
 }
 
+[x-cloak] {
+    display: none !important;
+}
+
 /* Efectos hover en cards */
 .card-hover:hover {
     transform: translateY(-2px);

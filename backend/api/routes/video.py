@@ -10,6 +10,7 @@ import sys
 import os
 import uuid
 import shutil
+import re
 from pathlib import Path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from backend.core.camera_config import camera_manager
@@ -360,6 +361,124 @@ async def get_alerts_history(limit: int = 50, tipo: str = None, camera_id: int =
     except Exception as e:
         print(f"[ERROR] Error en historial: {e}")
         return {"success": False, "alerts": [], "error": str(e)}
+    finally:
+        db.close()
+
+
+@router.get("/alerts/{alert_id}/detail")
+async def get_alert_detail(alert_id: int):
+    """Obtiene el detalle de una alerta, incluyendo evidencia y desglose de EPP."""
+    from backend.core.alert_manager import alert_manager
+    from backend.core.database import Alerta, DeteccionEPP, TipoEPP
+
+    db = alert_manager._get_db()
+    try:
+        alerta = db.query(Alerta).filter(Alerta.id == alert_id).first()
+        if not alerta:
+            raise HTTPException(status_code=404, detail="Alerta no encontrada")
+
+        deteccion = alerta.deteccion
+        if deteccion is None:
+            return {
+                "success": True,
+                "alerta": {
+                    "id": alerta.id,
+                    "mensaje": alerta.mensaje,
+                    "severidad": alerta.severidad,
+                    "estado": alerta.estado,
+                    "timestamp": alerta.timestamp.strftime('%d/%m/%Y %H:%M %p') if alerta.timestamp else '',
+                },
+                "deteccion": None,
+                "epp": {
+                    "correctos": [],
+                    "incorrectos": [],
+                    "no_usa": [],
+                    "no_evaluable_modelo": [],
+                    "detalle": []
+                }
+            }
+
+        observaciones = deteccion.observaciones or ""
+        match_no_evaluable = re.search(r"No evaluable por modelo:\s*(.+)$", observaciones)
+        no_evaluable_modelo = []
+        if match_no_evaluable:
+            no_evaluable_modelo = [item.strip() for item in match_no_evaluable.group(1).split(',') if item.strip()]
+
+        detalle_epp = []
+        correctos = []
+        incorrectos = []
+        no_usa = []
+
+        registros_epp = (
+            db.query(DeteccionEPP, TipoEPP)
+            .join(TipoEPP, DeteccionEPP.tipo_epp_id == TipoEPP.id)
+            .filter(DeteccionEPP.deteccion_id == deteccion.id)
+            .all()
+        )
+
+        for deteccion_epp, tipo_epp in registros_epp:
+            nombre = tipo_epp.nombre.lower()
+            detectado = bool(deteccion_epp.detectado)
+            uso_correcto = deteccion_epp.uso_correcto
+
+            if detectado and uso_correcto == 1:
+                estado = "correcto"
+                correctos.append(nombre)
+            elif detectado:
+                estado = "incorrecto"
+                incorrectos.append(nombre)
+            elif nombre in no_evaluable_modelo:
+                estado = "no_evaluable_modelo"
+            else:
+                estado = "no_usa"
+                no_usa.append(nombre)
+
+            detalle_epp.append({
+                "tipo": tipo_epp.nombre,
+                "estado": estado,
+                "detectado": detectado,
+                "uso_correcto": None if deteccion_epp.uso_correcto is None else bool(deteccion_epp.uso_correcto),
+                "confianza": deteccion_epp.confianza,
+                "bbox": {
+                    "x": deteccion_epp.bbox_x,
+                    "y": deteccion_epp.bbox_y,
+                    "width": deteccion_epp.bbox_width,
+                    "height": deteccion_epp.bbox_height,
+                }
+            })
+
+        return {
+            "success": True,
+            "alerta": {
+                "id": alerta.id,
+                "mensaje": alerta.mensaje,
+                "tipo": alerta.tipo,
+                "severidad": alerta.severidad,
+                "estado": alerta.estado,
+                "timestamp": alerta.timestamp.strftime('%d/%m/%Y %H:%M %p') if alerta.timestamp else '',
+                "camera_nombre": alerta.camera.nombre if alerta.camera else 'Desconocida',
+                "zona": alerta.camera.zona if alerta.camera else '',
+            },
+            "deteccion": {
+                "id": deteccion.id,
+                "estado_epp": deteccion.estado_epp,
+                "observaciones": observaciones,
+                "imagen_path": deteccion.imagen_path,
+                "timestamp": deteccion.timestamp.strftime('%d/%m/%Y %H:%M %p') if deteccion.timestamp else '',
+            },
+            "epp": {
+                "correctos": correctos,
+                "incorrectos": incorrectos,
+                "no_usa": no_usa,
+                "no_evaluable_modelo": no_evaluable_modelo,
+                "detalle": detalle_epp,
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Error obteniendo detalle de alerta {alert_id}: {e}")
+        return {"success": False, "error": str(e)}
     finally:
         db.close()
 

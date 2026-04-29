@@ -9,6 +9,10 @@
     tipoFiltro: 'todas',
     alertas: [],
     camaras: [],
+    evidenciaAbierta: false,
+    evidenciaCargando: false,
+    evidenciaError: '',
+    evidencia: null,
     async loadAlertas() {
         try {
             const response = await fetch('/api/alerts/history?limit=100&tipo=' + this.tipoFiltro);
@@ -35,6 +39,34 @@
     filtrarPorTipo(tipo) {
         this.tipoFiltro = tipo;
         this.loadAlertas();
+    },
+    async verEvidencia(alerta) {
+        this.evidenciaAbierta = true;
+        this.evidenciaCargando = true;
+        this.evidenciaError = '';
+        this.evidencia = null;
+
+        try {
+            const response = await fetch(`/api/alerts/${alerta.id}/detail`);
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'No se pudo cargar la evidencia');
+            }
+
+            this.evidencia = data;
+        } catch (error) {
+            console.error('Error cargando evidencia:', error);
+            this.evidenciaError = error.message || 'No se pudo cargar la evidencia';
+        } finally {
+            this.evidenciaCargando = false;
+        }
+    },
+    cerrarEvidencia() {
+        this.evidenciaAbierta = false;
+        this.evidencia = null;
+        this.evidenciaError = '';
+        this.evidenciaCargando = false;
     }
 }" x-init="init()">
     <!-- Filtros -->
@@ -179,7 +211,7 @@
                             <button class="text-sm text-gray-400 hover:text-white transition-all">
                                 Marcar Falso Positivo
                             </button>
-                            <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-all flex items-center space-x-2">
+                            <button @click="verEvidencia(alerta)" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-all flex items-center space-x-2">
                                 <span>Ver Evidencia</span>
                                 <i data-lucide="external-link" class="w-4 h-4"></i>
                             </button>
@@ -188,6 +220,90 @@
                 </div>
             </div>
         </template>
+    </div>
+
+    <!-- Modal de evidencia -->
+    <div x-cloak x-show="evidenciaAbierta" x-transition class="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+        <div class="absolute inset-0 bg-black/75" @click="cerrarEvidencia()"></div>
+        <div class="relative w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl border border-gray-700 bg-[#111827] shadow-2xl">
+            <div class="flex items-start justify-between border-b border-gray-800 px-6 py-4">
+                <div>
+                    <p class="text-xs uppercase tracking-[0.2em] text-gray-400">Evidencia de alerta</p>
+                    <h3 class="mt-1 text-lg font-semibold text-white" x-text="evidencia?.alerta?.mensaje || 'Detalle de evidencia'"></h3>
+                </div>
+                <button @click="cerrarEvidencia()" class="rounded-lg px-3 py-2 text-sm text-gray-400 hover:bg-gray-800 hover:text-white">Cerrar</button>
+            </div>
+
+            <div class="grid grid-cols-1 gap-6 p-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
+                <div class="min-h-[320px] rounded-xl border border-gray-800 bg-black/40 p-3">
+                    <div x-show="evidenciaCargando" class="flex min-h-[320px] items-center justify-center text-gray-400">
+                        Cargando evidencia...
+                    </div>
+                    <div x-show="evidenciaError" class="flex min-h-[320px] items-center justify-center text-red-400" x-text="evidenciaError"></div>
+                    <a x-show="!evidenciaCargando && !evidenciaError && evidencia?.deteccion?.imagen_path"
+                       :href="'/' + evidencia.deteccion.imagen_path"
+                       target="_blank"
+                       class="block h-full w-full">
+                        <img :src="'/' + evidencia.deteccion.imagen_path" class="h-full w-full rounded-lg object-contain bg-black" alt="Evidencia de alerta">
+                    </a>
+                    <div x-show="!evidenciaCargando && !evidenciaError && !evidencia?.deteccion?.imagen_path" class="flex min-h-[320px] items-center justify-center rounded-lg border border-dashed border-gray-700 text-gray-400">
+                        La alerta no tiene imagen asociada.
+                    </div>
+                </div>
+
+                <div class="space-y-4 overflow-y-auto pr-1">
+                    <div class="rounded-xl border border-gray-800 bg-[#0F172A] p-4">
+                        <p class="text-xs uppercase tracking-[0.2em] text-gray-400">Resumen</p>
+                        <p class="mt-2 text-sm text-gray-300" x-text="evidencia?.alerta?.timestamp || ''"></p>
+                        <p class="text-sm text-gray-300" x-text="evidencia?.alerta?.camera_nombre ? ('Cámara: ' + evidencia.alerta.camera_nombre) : ''"></p>
+                        <p class="text-sm text-gray-300" x-text="evidencia?.alerta?.zona ? ('Zona: ' + evidencia.alerta.zona) : ''"></p>
+                        <p class="mt-2 text-sm text-gray-300" x-text="evidencia?.deteccion?.observaciones || ''"></p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div class="rounded-xl border border-emerald-900/40 bg-emerald-950/30 p-3">
+                            <p class="text-emerald-300">Correctos</p>
+                            <p class="mt-1 text-lg font-semibold text-white" x-text="evidencia?.epp?.correctos?.length || 0"></p>
+                        </div>
+                        <div class="rounded-xl border border-red-900/40 bg-red-950/30 p-3">
+                            <p class="text-red-300">Incorrectos</p>
+                            <p class="mt-1 text-lg font-semibold text-white" x-text="evidencia?.epp?.incorrectos?.length || 0"></p>
+                        </div>
+                        <div class="rounded-xl border border-amber-900/40 bg-amber-950/30 p-3">
+                            <p class="text-amber-300">No usa</p>
+                            <p class="mt-1 text-lg font-semibold text-white" x-text="evidencia?.epp?.no_usa?.length || 0"></p>
+                        </div>
+                        <div class="rounded-xl border border-sky-900/40 bg-sky-950/30 p-3">
+                            <p class="text-sky-300">No evaluable</p>
+                            <p class="mt-1 text-lg font-semibold text-white" x-text="evidencia?.epp?.no_evaluable_modelo?.length || 0"></p>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-gray-800 bg-[#0F172A] p-4">
+                        <p class="text-xs uppercase tracking-[0.2em] text-gray-400 mb-3">Detalle por EPP</p>
+                        <template x-if="evidencia?.epp?.detalle?.length">
+                            <div class="space-y-2">
+                                <template x-for="item in evidencia.epp.detalle" :key="item.tipo">
+                                    <div class="flex items-center justify-between rounded-lg border border-gray-800 bg-[#111827] px-3 py-2 text-sm">
+                                        <span class="text-white" x-text="item.tipo"></span>
+                                        <span class="rounded-full px-2 py-1 text-xs font-semibold uppercase"
+                                              :class="{
+                                                  'bg-emerald-900/40 text-emerald-300': item.estado === 'correcto',
+                                                  'bg-red-900/40 text-red-300': item.estado === 'incorrecto',
+                                                  'bg-amber-900/40 text-amber-300': item.estado === 'no_usa',
+                                                  'bg-sky-900/40 text-sky-300': item.estado === 'no_evaluable_modelo'
+                                              }"
+                                              x-text="item.estado.replaceAll('_', ' ')">
+                                        </span>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        <p x-show="!evidenciaCargando && !evidenciaError && !(evidencia?.epp?.detalle?.length)" class="text-sm text-gray-400">Sin detalle disponible.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     
     <!-- Botón de exportar -->

@@ -170,6 +170,85 @@ class ConfiguracionIA(Base):
     descripcion = Column(String(500))
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
+class AnotacionManual(Base):
+    """Anotaciones manuales del usuario para evaluación FI-PS (ground truth)"""
+    __tablename__ = "anotaciones_manuales"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    video_id = Column(String(100), nullable=False)  # ID del video subido
+    frame_number = Column(Integer, nullable=False)  # Número del frame
+    timestamp = Column(DateTime, default=datetime.now, nullable=False)
+    
+    # Anotaciones manuales del usuario (lo que realmente vio)
+    # 1 = presente, 0 = ausente
+    casco_manual = Column(Integer)
+    chaleco_manual = Column(Integer)
+    guantes_manual = Column(Integer)
+    botas_manual = Column(Integer)
+    gafas_manual = Column(Integer)
+    
+    # Observaciones adicionales del usuario
+    notas = Column(Text)
+    
+    # Cuando se anotó
+    anotacion_fecha = Column(DateTime, default=datetime.now)
+    anotado_por = Column(String(100))  # Usuario que anotó
+
+class EvaluacionFIPS(Base):
+    """Reporte de evaluación FI-PS (Precisión y Sensibilidad)"""
+    __tablename__ = "evaluacion_fips"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    video_id = Column(String(100), nullable=False)
+    nombre_evaluador = Column(String(150))
+    fecha_evaluacion = Column(DateTime, default=datetime.now)
+    
+    # Métricas por tipo de EPP
+    # Casco
+    casco_vp = Column(Integer, default=0)  # Verdaderos positivos
+    casco_fp = Column(Integer, default=0)  # Falsos positivos
+    casco_vn = Column(Integer, default=0)  # Verdaderos negativos
+    casco_fn = Column(Integer, default=0)  # Falsos negativos
+    casco_precision = Column(Float)  # (VP / (VP + FP)) * 100
+    casco_sensibilidad = Column(Float)  # (VP / (VP + FN)) * 100
+    
+    # Chaleco
+    chaleco_vp = Column(Integer, default=0)
+    chaleco_fp = Column(Integer, default=0)
+    chaleco_vn = Column(Integer, default=0)
+    chaleco_fn = Column(Integer, default=0)
+    chaleco_precision = Column(Float)
+    chaleco_sensibilidad = Column(Float)
+    
+    # Guantes
+    guantes_vp = Column(Integer, default=0)
+    guantes_fp = Column(Integer, default=0)
+    guantes_vn = Column(Integer, default=0)
+    guantes_fn = Column(Integer, default=0)
+    guantes_precision = Column(Float)
+    guantes_sensibilidad = Column(Float)
+    
+    # Botas
+    botas_vp = Column(Integer, default=0)
+    botas_fp = Column(Integer, default=0)
+    botas_vn = Column(Integer, default=0)
+    botas_fn = Column(Integer, default=0)
+    botas_precision = Column(Float)
+    botas_sensibilidad = Column(Float)
+    
+    # Gafas
+    gafas_vp = Column(Integer, default=0)
+    gafas_fp = Column(Integer, default=0)
+    gafas_vn = Column(Integer, default=0)
+    gafas_fn = Column(Integer, default=0)
+    gafas_precision = Column(Float)
+    gafas_sensibilidad = Column(Float)
+    
+    # Resumen general
+    precision_promedio = Column(Float)  # Promedio de precisiones
+    sensibilidad_promedio = Column(Float)  # Promedio de sensibilidades
+    total_momentos_anotados = Column(Integer)
+
 # ============= FUNCIONES AUXILIARES =============
 
 def get_db():

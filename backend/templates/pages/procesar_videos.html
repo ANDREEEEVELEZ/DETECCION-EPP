@@ -5,45 +5,41 @@
 {% block page_title %}Procesar Videos Pregrabados{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto" x-data="{
+<div class="max-w-7xl mx-auto" x-data="{
     videoId: null,
     videoInfo: null,
     stats: { frames_procesados: 0, detecciones_totales: 0, frames_con_incumplimiento: 0, frames_conformes: 0, desglose_epp: {}, progress: 0 },
     isProcessing: false,
     uploading: false,
+    isPaused: false,
+    currentFrame: 0,
+    currentObservation: null,
+    pausedPointsCount: 0,
+    isExporting: false,
+    evaluationComplete: false,
+    evaluationResult: null,
     
     async uploadVideo(event) {
         const file = event.target.files[0];
         if (!file) return;
-        
-        // Validar tamaño (500MB)
         if (file.size > 500 * 1024 * 1024) {
             alert('El archivo es demasiado grande. Máximo 500MB.');
             return;
         }
-        
         this.uploading = true;
         const formData = new FormData();
         formData.append('file', file);
-        
         try {
-            const response = await fetch('/api/videos/upload', {
-                method: 'POST',
-                body: formData
-            });
-            
+            const response = await fetch('/api/videos/upload', { method: 'POST', body: formData });
             const data = await response.json();
-            
             if (data.success) {
                 this.videoId = data.video_id;
                 this.videoInfo = data;
-                console.log('Video subido:', data);
             } else {
-                alert('Error subiendo video: ' + (data.detail || 'Error desconocido'));
+                alert('Error: ' + (data.detail || 'Unknown'));
             }
         } catch (error) {
-            console.error('Error:', error);
-            alert('Error subiendo video');
+            alert('Error uploading video');
         } finally {
             this.uploading = false;
         }
@@ -51,45 +47,35 @@
     
     startProcessing() {
         if (!this.videoId) return;
-        
         this.isProcessing = true;
-        
-        // Iniciar actualización de estadísticas
         this.updateStats();
         this.statsInterval = setInterval(() => this.updateStats(), 1000);
     },
     
     async updateStats() {
         if (!this.videoId) return;
-        
         try {
             const response = await fetch(`/api/videos/stats/${this.videoId}`);
             const data = await response.json();
-            
             if (data.success) {
                 this.stats = data;
-                
-                // Si llegó al 100%, detener
                 if (data.progress >= 99.9) {
                     clearInterval(this.statsInterval);
-                    setTimeout(() => {
-                        this.isProcessing = false;
-                    }, 2000);
+                    setTimeout(() => { this.isProcessing = false; }, 2000);
                 }
             }
         } catch (error) {
-            console.error('Error obteniendo stats:', error);
+            console.error('Error:', error);
         }
     },
     
     async deleteVideo() {
         if (!this.videoId) return;
-        
         try {
             await fetch(`/api/videos/${this.videoId}`, { method: 'DELETE' });
             this.resetState();
         } catch (error) {
-            console.error('Error eliminando video:', error);
+            console.error('Error:', error);
         }
     },
     
@@ -99,14 +85,87 @@
         this.videoInfo = null;
         this.stats = { frames_procesados: 0, detecciones_totales: 0, frames_con_incumplimiento: 0, frames_conformes: 0, desglose_epp: {}, progress: 0 };
         this.isProcessing = false;
-    }
+        this.isPaused = false;
+        this.currentObservation = null;
+        this.pausedPointsCount = 0;
+        this.evaluationComplete = false;
+    },
+    async togglePause() {
+        if (!this.videoId) return;
+
+        try {
+            if (this.isPaused) {
+                const response = await fetch(`/api/videos/${this.videoId}/resume`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    this.isPaused = false;
+                    this.currentObservation = null;
+                }
+            } else {
+                const response = await fetch(`/api/videos/${this.videoId}/pause`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    this.isPaused = true;
+                    this.currentFrame = data.frame_number || Math.floor(this.stats.frames_procesados);
+                    this.currentObservation = data.observation || null;
+                    this.pausedPointsCount = data.observations_count || 0;
+                }
+            }
+        } catch (error) {
+            console.error('Error pausando/reanudando video:', error);
+            alert('No se pudo cambiar el estado de pausa');
+        }
+    },
+    
+    async exportFicha() {
+        if (!this.videoId) {
+            alert('No hay video seleccionado');
+            return;
+        }
+        
+        if (this.pausedPointsCount === 0) {
+            alert('Debe pausar el video al menos una vez para capturar observaciones');
+            return;
+        }
+        
+        this.isExporting = true;
+        try {
+            const response = await fetch(`/api/videos/${this.videoId}/observations/export`, {
+                method: 'GET',
+                headers: { 'Accept': 'application/zip' }
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                alert('Error exportando: ' + (error.detail || 'Error desconocido'));
+                return;
+            }
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ficha_observacion_${this.videoId.substring(0, 8)}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+            
+            alert('Ficha exportada correctamente');
+        } catch (error) {
+            console.error('Error exportando:', error);
+            alert('Error exportando ficha: ' + error.message);
+        } finally {
+            this.isExporting = false;
+        }
+    },
 }">
     
     <!-- Upload Area -->
-    <div x-show="!videoId" class="bg-[#1E293B] border-2 border-dashed border-gray-700 rounded-xl p-12 text-center mb-6 hover:border-blue-600 transition-all">
+    <div x-show="!videoId" class="bg-[#1E293B] border-2 border-dashed border-gray-700 rounded-xl p-12 text-center mb-6">
         <i data-lucide="upload-cloud" class="w-20 h-20 text-gray-600 mx-auto mb-4"></i>
         <h3 class="text-xl font-semibold text-white mb-2">Subir Video para Analizar</h3>
-        <p class="text-gray-400 mb-6">Arrastra un archivo de video o haz clic para seleccionar</p>
+        <p class="text-gray-400 mb-6">Selecciona un archivo de video</p>
         
         <label class="cursor-pointer">
             <input type="file" accept="video/mp4,video/avi,video/mov,video/x-matroska" @change="uploadVideo" class="hidden">
@@ -115,8 +174,7 @@
                 <span x-show="uploading">Subiendo...</span>
             </span>
         </label>
-        
-        <p class="text-sm text-gray-500 mt-4">Formatos soportados: MP4, AVI, MOV, MKV • Tamaño máximo: 500MB</p>
+        <p class="text-sm text-gray-500 mt-4">Máximo 500MB</p>
     </div>
     
     <!-- Video Info Card -->
@@ -143,122 +201,143 @@
                     </div>
                 </div>
             </div>
-            <button @click="deleteVideo" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-all">
+            <button @click="deleteVideo" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm">
                 Cancelar
             </button>
         </div>
         
-        <button @click="startProcessing" class="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all flex items-center justify-center space-x-2">
-            <i data-lucide="play" class="w-5 h-5"></i>
-            <span>Iniciar Procesamiento</span>
+        <button @click="startProcessing" class="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all">
+            <i data-lucide="play" class="w-5 h-5 inline mr-2"></i>Iniciar Procesamiento
         </button>
     </div>
     
     <!-- Processing View -->
     <div x-show="isProcessing" class="space-y-6">
         
-        <!-- Video Player -->
-        <div class="bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden">
-            <div class="aspect-video bg-black relative">
-                <img :src="`/api/videos/stream/${videoId}?t=${Date.now()}`" 
-                     class="w-full h-full object-contain"
-                     @error="console.error('Error cargando stream')"
-                     @load="console.log('Stream cargado')">
+        <!-- Video Player & Annotation Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- Video Player -->
+            <div class="lg:col-span-3 bg-[#1E293B] border border-gray-800 rounded-xl overflow-hidden">
+                <div class="aspect-video bg-black relative">
+                    <img :src="`/api/videos/stream/${videoId}`" 
+                         class="w-full h-full object-contain"
+                         @error="console.error('Error')"
+                         @load="console.log('Loaded')">
+                    
+                    <!-- Pause Button -->
+                    <button @click="togglePause" 
+                            class="absolute bottom-4 left-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-all"
+                            :class="isPaused ? 'bg-green-600 hover:bg-green-700' : ''">
+                        <i :data-lucide="isPaused ? 'play' : 'pause'" class="w-4 h-4 inline mr-2"></i>
+                        <span x-text="isPaused ? 'Reanudar' : 'Pausar'"></span>
+                    </button>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div class="p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm text-gray-400">Progreso</span>
+                        <span class="text-sm font-semibold text-white" x-text="stats.progress.toFixed(1) + '%'"></span>
+                    </div>
+                    <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
+                        <div class="h-full bg-blue-600 transition-all duration-300" :style="`width: ${stats.progress}%`"></div>
+                    </div>
+                    <div class="mt-2 text-xs text-gray-500">
+                        <span x-text="`Frame ${stats.frames_procesados} / ${videoInfo?.total_frames || 0}`"></span>
+                    </div>
+                </div>
             </div>
             
-            <!-- Progress Bar -->
-            <div class="p-4">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm text-gray-400">Progreso de Procesamiento</span>
-                    <span class="text-sm font-semibold text-white" x-text="stats.progress.toFixed(1) + '%'"></span>
+            <!-- Observation Panel -->
+            <div x-show="isPaused" class="bg-[#1E293B] border border-gray-800 rounded-xl p-6 h-fit">
+                <h3 class="text-lg font-semibold text-white mb-4">Ficha de Observación</h3>
+                <p class="text-sm text-gray-400 mb-2">Frame actual: <span x-text="currentFrame" class="text-blue-400 font-semibold"></span></p>
+                <p class="text-sm text-gray-400 mb-4">Estado del sistema: <span x-text="currentObservation?.estado || 'N/A'" class="text-emerald-400 font-semibold"></span></p>
+
+                <div x-show="currentObservation" class="space-y-3 mb-4">
+                    <div class="bg-[#0F172A] border border-gray-700 rounded-lg p-3">
+                        <p class="text-xs text-gray-400">Mensaje</p>
+                        <p class="text-sm text-white" x-text="currentObservation?.mensaje || ''"></p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <template x-for="epp in ['casco','chaleco','guantes','botas','gafas']" :key="epp">
+                            <div class="bg-[#0F172A] border border-gray-700 rounded-lg p-3 flex items-center justify-between">
+                                <span class="text-gray-300 capitalize" x-text="epp"></span>
+                                <span class="px-2 py-1 rounded text-[11px] font-semibold"
+                                      :class="currentObservation?.epp_positioning?.[epp] === 'correcto' ? 'bg-emerald-900/40 text-emerald-400' : (currentObservation?.epp_positioning?.[epp] === 'incorrecto' ? 'bg-amber-900/40 text-amber-400' : 'bg-slate-800 text-slate-300')"
+                                      x-text="currentObservation?.epp_positioning?.[epp] || 'ausente'"></span>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="bg-[#0F172A] border border-gray-700 rounded-lg p-3 text-xs text-gray-300">
+                        <p class="mb-1"><span class="text-gray-400">Score:</span> <span x-text="currentObservation?.score || 0"></span>%</p>
+                        <p><span class="text-gray-400">Fecha:</span> <span x-text="currentObservation?.timestamp || ''"></span></p>
+                    </div>
                 </div>
-                <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
-                    <div class="h-full bg-blue-600 transition-all duration-300" :style="`width: ${stats.progress}%`"></div>
+
+                <div class="mb-4 p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
+                    <p class="text-sm text-blue-300">
+                        <span x-text="pausedPointsCount"></span> 
+                        <span x-text="pausedPointsCount === 1 ? 'momento capturado' : 'momentos capturados'"></span>
+                    </p>
                 </div>
-                <div class="mt-2 text-xs text-gray-500 flex justify-between">
-                    <span x-text="`Frame ${stats.frames_procesados} / ${videoInfo?.total_frames || 0}`"></span>
-                    <span x-text="`Tiempo restante: ~${Math.ceil((videoInfo?.duration || 0) * (100 - stats.progress) / 100)}s`"></span>
-                </div>
+
+                <button @click="exportFicha()" 
+                        :disabled="pausedPointsCount === 0 || isExporting"
+                        :class="pausedPointsCount === 0 || isExporting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-emerald-600'"
+                        class="w-full px-4 py-3 bg-emerald-700 text-white rounded-lg font-semibold transition-all text-sm">
+                    <span x-show="!isExporting">📥 Exportar Ficha ZIP</span>
+                    <span x-show="isExporting">Exportando...</span>
+                </button>
+                
+                <p x-show="pausedPointsCount === 0" class="mt-3 text-xs text-amber-400 text-center">
+                    Pausa el video para capturar momentos antes de exportar
+                </p>
             </div>
         </div>
         
-        <!-- Stats Panel -->
+        <!-- Stats Grid -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <!-- Frames Procesados -->
             <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6">
-                <div class="flex items-center space-x-3 mb-2">
-                    <div class="w-10 h-10 bg-blue-900/30 rounded-lg flex items-center justify-center">
-                        <i data-lucide="film" class="w-5 h-5 text-blue-400"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-400">Imágenes Procesadas</p>
-                        <p class="text-2xl font-bold text-white"><span x-text="stats.frames_procesados"></span>/<span x-text="videoInfo?.total_frames || 0"></span></p>
-                    </div>
-                </div>
+                <p class="text-xs text-gray-400 mb-2">Imágenes Procesadas</p>
+                <p class="text-2xl font-bold text-white"><span x-text="stats.frames_procesados"></span>/<span x-text="videoInfo?.total_frames || 0"></span></p>
             </div>
-            
-            <!-- Frames Conformes -->
             <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6">
-                <div class="flex items-center space-x-3 mb-2">
-                    <div class="w-10 h-10 bg-emerald-900/30 rounded-lg flex items-center justify-center">
-                        <i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-400">Imágenes Conformes</p>
-                        <p class="text-2xl font-bold text-emerald-400" x-text="stats.frames_conformes"></p>
-                    </div>
-                </div>
+                <p class="text-xs text-gray-400 mb-2">Imágenes Conformes</p>
+                <p class="text-2xl font-bold text-emerald-400" x-text="stats.frames_conformes"></p>
             </div>
-            
-            <!-- Frames con Incumplimiento -->
             <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6">
-                <div class="flex items-center space-x-3 mb-2">
-                    <div class="w-10 h-10 bg-amber-900/30 rounded-lg flex items-center justify-center">
-                        <i data-lucide="alert-circle" class="w-5 h-5 text-amber-400"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-400">Imágenes con Incumplimiento</p>
-                        <p class="text-2xl font-bold text-amber-400" x-text="stats.frames_con_incumplimiento"></p>
-                    </div>
-                </div>
+                <p class="text-xs text-gray-400 mb-2">Imágenes con Incumplimiento</p>
+                <p class="text-2xl font-bold text-amber-400" x-text="stats.frames_con_incumplimiento"></p>
             </div>
-            
-            <!-- Detecciones EPP Totales -->
             <div class="bg-[#1E293B] border border-gray-800 rounded-xl p-6">
-                <div class="flex items-center space-x-3 mb-2">
-                    <div class="w-10 h-10 bg-purple-900/30 rounded-lg flex items-center justify-center">
-                        <i data-lucide="package" class="w-5 h-5 text-purple-400"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-400">Total de Detecciones EPP</p>
-                        <p class="text-2xl font-bold text-white" x-text="stats.detecciones_totales"></p>
-                    </div>
-                </div>
+                <p class="text-xs text-gray-400 mb-2">Total Detecciones</p>
+                <p class="text-2xl font-bold text-white" x-text="stats.detecciones_totales"></p>
             </div>
         </div>
 
-        <!-- Desglose de EPP por Tipo -->
-        <div x-show="stats.desglose_epp && Object.keys(stats.desglose_epp).length > 0" class="bg-[#1E293B] border border-gray-800 rounded-xl p-6 mt-6">
+        <!-- EPP Breakdown -->
+        <div x-show="stats.desglose_epp && Object.keys(stats.desglose_epp).length > 0" class="bg-[#1E293B] border border-gray-800 rounded-xl p-6">
             <h3 class="text-lg font-semibold text-white mb-4">Detecciones por Tipo de EPP</h3>
             <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div class="bg-[#0F172A] border border-gray-800 rounded-lg p-3 text-center">
-                    <p class="text-xs text-gray-400 mb-1">Casco</p>
+                    <p class="text-xs text-gray-400">Casco</p>
                     <p class="text-xl font-bold text-yellow-400" x-text="stats.desglose_epp.casco || 0"></p>
                 </div>
                 <div class="bg-[#0F172A] border border-gray-800 rounded-lg p-3 text-center">
-                    <p class="text-xs text-gray-400 mb-1">Chaleco</p>
+                    <p class="text-xs text-gray-400">Chaleco</p>
                     <p class="text-xl font-bold text-orange-400" x-text="stats.desglose_epp.chaleco || 0"></p>
                 </div>
                 <div class="bg-[#0F172A] border border-gray-800 rounded-lg p-3 text-center">
-                    <p class="text-xs text-gray-400 mb-1">Guantes</p>
+                    <p class="text-xs text-gray-400">Guantes</p>
                     <p class="text-xl font-bold text-blue-400" x-text="stats.desglose_epp.guantes || 0"></p>
                 </div>
                 <div class="bg-[#0F172A] border border-gray-800 rounded-lg p-3 text-center">
-                    <p class="text-xs text-gray-400 mb-1">Botas</p>
+                    <p class="text-xs text-gray-400">Botas</p>
                     <p class="text-xl font-bold text-sky-400" x-text="stats.desglose_epp.botas || 0"></p>
                 </div>
                 <div class="bg-[#0F172A] border border-gray-800 rounded-lg p-3 text-center">
-                    <p class="text-xs text-gray-400 mb-1">Gafas</p>
+                    <p class="text-xs text-gray-400">Gafas</p>
                     <p class="text-xl font-bold text-emerald-400" x-text="stats.desglose_epp.gafas || 0"></p>
                 </div>
             </div>
@@ -267,8 +346,69 @@
         <!-- Actions -->
         <div class="flex justify-center space-x-4">
             <button @click="resetState" class="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-semibold transition-all">
-                Procesar Otro Video
+                <i data-lucide="refresh-cw" class="w-5 h-5 inline mr-2"></i>Nuevo Video
             </button>
+        </div>
+        
+        <!-- FI-PS Results (hidden, kept for future use) -->
+        <div x-show="false && evaluationComplete && evaluationResult" class="bg-[#1E293B] border border-gray-800 rounded-xl p-8">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold text-white mb-2">Ficha FI-PS</h2>
+                <p class="text-gray-400">Precisión y Sensibilidad</p>
+            </div>
+            
+            <!-- Summary -->
+            <div class="grid grid-cols-2 gap-6 mb-8 p-6 bg-[#0F172A] border border-gray-700 rounded-xl">
+                <div class="text-center">
+                    <p class="text-gray-400 mb-2">Precisión Promedio</p>
+                    <p class="text-4xl font-bold text-blue-400" x-text="evaluationResult.precision_promedio + '%'"></p>
+                </div>
+                <div class="text-center">
+                    <p class="text-gray-400 mb-2">Sensibilidad Promedio</p>
+                    <p class="text-4xl font-bold text-emerald-400" x-text="evaluationResult.sensibilidad_promedio + '%'"></p>
+                </div>
+            </div>
+            
+            <!-- Table -->
+            <div class="overflow-x-auto mb-8">
+                <table class="w-full text-sm text-gray-300 border-collapse">
+                    <thead>
+                        <tr class="bg-[#0F172A]">
+                            <th class="border border-gray-700 p-3 text-left">EPP</th>
+                            <th class="border border-gray-700 p-3 text-center">VP</th>
+                            <th class="border border-gray-700 p-3 text-center">FP</th>
+                            <th class="border border-gray-700 p-3 text-center">VN</th>
+                            <th class="border border-gray-700 p-3 text-center">FN</th>
+                            <th class="border border-gray-700 p-3 text-center">Precisión</th>
+                            <th class="border border-gray-700 p-3 text-center">Sensibilidad</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(epp, key) in ['casco', 'chaleco', 'guantes', 'botas', 'gafas']" :key="key">
+                            <tr class="hover:bg-[#0F172A]">
+                                <td class="border border-gray-700 p-3 font-semibold capitalize" x-text="key"></td>
+                                <td class="border border-gray-700 p-3 text-center" x-text="evaluationResult.metricas_por_epp[key].vp"></td>
+                                <td class="border border-gray-700 p-3 text-center" x-text="evaluationResult.metricas_por_epp[key].fp"></td>
+                                <td class="border border-gray-700 p-3 text-center" x-text="evaluationResult.metricas_por_epp[key].vn"></td>
+                                <td class="border border-gray-700 p-3 text-center" x-text="evaluationResult.metricas_por_epp[key].fn"></td>
+                                <td class="border border-gray-700 p-3 text-center" x-text="evaluationResult.metricas_por_epp[key].precision + '%'"></td>
+                                <td class="border border-gray-700 p-3 text-center" x-text="evaluationResult.metricas_por_epp[key].sensibilidad + '%'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 p-4 bg-[#0F172A] border border-gray-700 rounded-lg text-sm">
+                <div>
+                    <p class="text-gray-400">Anotaciones</p>
+                    <p class="text-xl font-semibold text-white" x-text="evaluationResult.total_momentos"></p>
+                </div>
+                <div>
+                    <p class="text-gray-400">Fecha</p>
+                    <p class="text-xl font-semibold text-white" x-text="evaluationResult.fecha"></p>
+                </div>
+            </div>
         </div>
     </div>
     

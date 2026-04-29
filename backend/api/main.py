@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from .routes import pages, video
 import os
 
+
 # Obtener rutas absolutas
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -26,6 +27,15 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # Incluir rutas de páginas y video
 app.include_router(pages.router)
 app.include_router(video.router, prefix="/api")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Asegura que el esquema de base de datos exista antes de atender requests."""
+    from backend.core.database import init_database, seed_initial_data
+
+    init_database()
+    seed_initial_data()
 
 # Ruta raíz redirige al dashboard
 @app.get("/")

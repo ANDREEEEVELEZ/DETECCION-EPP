@@ -9,6 +9,19 @@
     uploading: false,
     result: null,
     previewUrl: null,
+    zoomOpen: false,
+    zoomSrc: null,
+    zoomTitle: '',
+    openZoom(src, title) {
+        this.zoomSrc = src;
+        this.zoomTitle = title;
+        this.zoomOpen = true;
+    },
+    closeZoom() {
+        this.zoomOpen = false;
+        this.zoomSrc = null;
+        this.zoomTitle = '';
+    },
     async uploadImage(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -50,6 +63,7 @@
         this.result = null;
         this.previewUrl = null;
         this.uploading = false;
+        this.closeZoom();
         const input = document.getElementById('image-upload-input');
         if (input) input.value = '';
     }
@@ -122,30 +136,84 @@
                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-px bg-gray-800">
                     <div class="bg-[#0F172A] p-4">
                         <p class="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Imagen original</p>
-                        <div class="aspect-[4/3] rounded-xl overflow-hidden bg-black flex items-center justify-center">
+                        <button type="button" class="group w-full aspect-[4/3] rounded-xl overflow-hidden bg-black flex items-center justify-center cursor-zoom-in ring-1 ring-transparent hover:ring-blue-500/40 transition-all relative"
+                                @click="previewUrl && openZoom(previewUrl, 'Imagen original')">
                             <template x-if="previewUrl">
                                 <img :src="previewUrl" alt="Imagen original" class="w-full h-full object-contain">
                             </template>
                             <template x-if="!previewUrl">
                                 <div class="text-gray-600 text-sm">Aún no se ha cargado ninguna imagen</div>
                             </template>
+                            <div x-show="previewUrl" class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
+                        </button>
+                        <div class="mt-3 flex gap-3">
+                            <button type="button"
+                                    class="flex-1 px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-200 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    :disabled="!previewUrl"
+                                    @click="previewUrl && openZoom(previewUrl, 'Imagen original')">
+                                Ver grande
+                            </button>
+                            <a x-show="previewUrl"
+                               :href="previewUrl"
+                               :download="result?.filename ? `original_${result.filename}` : 'imagen_original.jpg'"
+                               class="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-sm text-white text-center hover:bg-blue-500 transition-colors">
+                                Descargar
+                            </a>
                         </div>
                     </div>
 
                     <div class="bg-[#0F172A] p-4">
                         <p class="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Resultado</p>
-                        <div class="aspect-[4/3] rounded-xl overflow-hidden bg-black flex items-center justify-center ring-1 ring-blue-500/20">
+                        <button type="button" class="group w-full aspect-[4/3] rounded-xl overflow-hidden bg-black flex items-center justify-center cursor-zoom-in ring-1 ring-blue-500/20 hover:ring-blue-400 transition-all relative"
+                                @click="result?.processed_image_path && openZoom('/' + result.processed_image_path, 'Resultado procesado')">
                             <template x-if="result?.processed_image_path">
                                 <img :src="'/' + result.processed_image_path" alt="Imagen procesada" class="w-full h-full object-contain">
                             </template>
                             <template x-if="!result?.processed_image_path">
                                 <div class="text-gray-600 text-sm">El resultado aparecerá aquí</div>
                             </template>
+                            <div x-show="result?.processed_image_path" class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
+                        </button>
+                        <div class="mt-3 flex gap-3">
+                            <button type="button"
+                                    class="flex-1 px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-200 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    :disabled="!result?.processed_image_path"
+                                    @click="result?.processed_image_path && openZoom('/' + result.processed_image_path, 'Resultado procesado')">
+                                Ver grande
+                            </button>
+                            <a x-show="result?.processed_image_path"
+                               :href="'/' + result.processed_image_path"
+                               :download="result?.filename ? `resultado_${result.filename}` : 'imagen_procesada.jpg'"
+                               class="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-sm text-white text-center hover:bg-blue-500 transition-colors">
+                                Descargar
+                            </a>
                         </div>
                     </div>
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    <div x-show="zoomOpen"
+         x-transition.opacity
+         @keydown.escape.window="closeZoom()"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
+         @click.self="closeZoom()"
+         style="display: none;">
+        <div class="w-full max-w-7xl rounded-3xl bg-[#0F172A] border border-gray-700 shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+                <div>
+                    <p class="text-xs uppercase tracking-[0.28em] text-blue-300">Vista ampliada</p>
+                    <h4 class="text-xl font-bold text-white mt-1" x-text="zoomTitle"></h4>
+                </div>
+                <button type="button" @click="closeZoom()" class="w-10 h-10 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors flex items-center justify-center">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="bg-black flex items-center justify-center p-3 md:p-6 max-h-[85vh]">
+                <img :src="zoomSrc" :alt="zoomTitle" class="max-w-full max-h-[80vh] object-contain">
+            </div>
         </div>
     </div>
 </div>

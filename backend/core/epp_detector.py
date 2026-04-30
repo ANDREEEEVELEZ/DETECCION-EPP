@@ -187,55 +187,99 @@ class EPPDetector:
         
         return detections
     
-    def detect_pose_keypoints(self, frame: np.ndarray) -> Optional[Dict]:
+    def detect_pose_people(self, frame: np.ndarray) -> List[Dict]:
         """
-        Detecta los keypoints del cuerpo humano usando YOLOv8-Pose
+        Detecta keypoints de todas las personas usando YOLOv8-Pose.
         
         Args:
             frame: Frame de video (BGR)
             
         Returns:
-            Dict con keypoints o None si no se detecta persona:
-            {
-                'keypoints': np.array (17, 3) - [x, y, confidence],
-                'bbox': [x1, y1, x2, y2],
-                'confidence': float
-            }
+            Lista de personas detectadas:
+            [
+                {
+                    'keypoints': np.array (17, 3) - [x, y, confidence],
+                    'bbox': [x1, y1, x2, y2] | None,
+                    'confidence': float
+                }
+            ]
         """
         if self.pose_model is None:
-            return None
+            return []
         
         try:
             # AUMENTAR confianza mínima para detección de pose
             results = self.pose_model(frame, conf=0.4, verbose=False)  # Aumentado de 0.3 a 0.4
             
-            # Tomar la primera persona detectada con mayor confianza
             if len(results) > 0 and results[0].keypoints is not None:
                 keypoints_data = results[0].keypoints.data.cpu().numpy()
-                
-                if len(keypoints_data) > 0:
-                    # Tomar la detección con mayor confianza
-                    keypoints = keypoints_data[0]  # Shape: (17, 3) - [x, y, conf]
-                    
-                    # Obtener bbox de la persona
-                    boxes = results[0].boxes
-                    if len(boxes) > 0:
-                        box = boxes[0]
+                boxes = results[0].boxes
+
+                people = []
+                for idx, keypoints in enumerate(keypoints_data):
+                    if boxes is not None and len(boxes) > idx:
+                        box = boxes[idx]
                         bbox = box.xyxy[0].cpu().numpy().astype(int)
                         conf = float(box.conf[0].cpu().numpy())
                     else:
                         bbox = None
                         conf = 0.0
-                    
-                    return {
+
+                    people.append({
                         'keypoints': keypoints,
                         'bbox': bbox,
                         'confidence': conf
-                    }
+                    })
+
+                return people
         except Exception as e:
             print(f"[EPP Detector] Error en detección de pose: {e}")
-        
-        return None
+
+        return []
+
+    def detect_pose_keypoints(self, frame: np.ndarray) -> Optional[Dict]:
+        """Compatibilidad: devuelve la persona más confiable o None."""
+        people = self.detect_pose_people(frame)
+        if not people:
+            return None
+        people = sorted(people, key=lambda p: p.get('confidence', 0), reverse=True)
+        return people[0]
+
+    def _select_best_pose_for_epp(self, epp_bbox: List, pose_people: List[Dict]) -> Optional[Dict]:
+        """Selecciona la persona más probable para un EPP usando IoU y distancia al centro."""
+        if not pose_people:
+            return None
+
+        ex1, ey1, ex2, ey2 = epp_bbox
+        ecx = (ex1 + ex2) / 2.0
+        ecy = (ey1 + ey2) / 2.0
+
+        best_pose = None
+        best_score = -1e9
+
+        for person in pose_people:
+            pb = person.get('bbox')
+            if pb is None:
+                continue
+
+            px1, py1, px2, py2 = pb
+            pcx = (px1 + px2) / 2.0
+            pcy = (py1 + py2) / 2.0
+
+            iou = self._calculate_iou([ex1, ey1, ex2, ey2], [px1, py1, px2, py2])
+            dist = np.sqrt((ecx - pcx) ** 2 + (ecy - pcy) ** 2)
+
+            # Priorizamos intersección y luego cercanía; suma simple robusta.
+            score = (iou * 3.0) - (dist / 1000.0)
+            if score > best_score:
+                best_score = score
+                best_pose = person
+
+        if best_pose is not None:
+            return best_pose
+
+        # Fallback: si no hay bbox de persona válida, usar la más confiable.
+        return sorted(pose_people, key=lambda p: p.get('confidence', 0), reverse=True)[0]
     
     def _calculate_iou(self, box1: List, box2: List) -> float:
         """
@@ -312,10 +356,8 @@ class EPPDetector:
             if right_ear[2] > min_conf:
                 head_keypoints.append(right_ear[1])
             
-            # Si no tenemos suficientes keypoints confiables, ser CONSERVADOR
+            # Si no tenemos suficientes keypoints confiables, no penalizar.
             if len(head_keypoints) < 2:
-                # Si no detectamos bien la cabeza, asumir INCORRECTO si está muy abajo
-                # Usar cualquier keypoint disponible
                 if nose[2] > 0.3:
                     head_y = nose[1]
                 elif left_eye[2] > 0.3 or right_eye[2] > 0.3:
@@ -324,17 +366,18 @@ class EPPDetector:
                 else:
                     return True  # No hay información, asumir correcto
                 
-                # Tolerancia MUY REDUCIDA cuando hay poca confianza
-                if epp_center_y > head_y + 50:
+                # Tolerancia más amplia para evitar falsos incorrectos.
+                if epp_center_y > head_y + 90:
                     return False
                 return True
             
             # Usar el promedio de keypoints confiables
             head_y = sum(head_keypoints) / len(head_keypoints)
             
-            # Validar posición con MENOR tolerancia (más estricto)
-            # El casco debe estar cerca o ARRIBA de la cabeza
-            tolerance = 60  # Reducido de 100 a 60 píxeles
+            # El casco debe estar cerca o arriba de la cabeza.
+            # Se deja una tolerancia mayor para no marcar como mal puesto cascos correctos
+            # cuando la persona está inclinada o el bbox es amplio.
+            tolerance = 110
             
             if epp_center_y > head_y + tolerance:
                 return False  # Casco muy abajo (en mano, en pecho, etc.)
@@ -365,7 +408,7 @@ class EPPDetector:
                 eye_keypoints.append(nose[1])
             
             if len(eye_keypoints) == 0:
-                # Sin información de ojos, ser conservador
+                # Sin información de ojos, no penalizar.
                 return True
             
             eye_y = sum(eye_keypoints) / len(eye_keypoints)
@@ -385,7 +428,7 @@ class EPPDetector:
             
             shoulder_y = sum(shoulder_keypoints) / len(shoulder_keypoints)
             
-            # Validación 1: Las gafas deben estar CERCA de los ojos
+            # Validación 1: Las gafas deben estar cerca de los ojos
             dist_to_eyes = abs(epp_center_y - eye_y)
             dist_to_shoulders = abs(epp_center_y - shoulder_y)
             
@@ -393,12 +436,12 @@ class EPPDetector:
             if dist_to_shoulders < dist_to_eyes:
                 return False  # Gafas en el pecho/colgadas
             
-            # Validación 2: Tolerancia REDUCIDA - no deben estar muy abajo de los ojos
-            if epp_center_y > eye_y + 50:  # Reducido de 80 a 50
+            # Validación 2: Tolerancia más amplia para evitar falsos mal puestos
+            if epp_center_y > eye_y + 75:
                 return False
             
             # Validación 3: No deben estar demasiado arriba (ej: sobre la cabeza)
-            if epp_center_y < eye_y - 80:
+            if epp_center_y < eye_y - 100:
                 return False
             
             return True
@@ -433,20 +476,17 @@ class EPPDetector:
             torso_top = sum(shoulder_keypoints) / len(shoulder_keypoints)
             torso_bottom = sum(hip_keypoints) / len(hip_keypoints)
             
-            # El chaleco debe estar mayormente dentro del área del torso
-            # Tolerancia REDUCIDA
-            tolerance = 30  # Reducido de 50 a 30
-            
+            # El chaleco debe caer dentro o muy cerca del torso.
+            tolerance = 55
             if epp_center_y < torso_top - tolerance or epp_center_y > torso_bottom + tolerance:
                 return False  # Chaleco fuera del torso
             
-            # El chaleco debe tener altura mínima (cubrir el torso)
-            # Si el bbox del chaleco es muy pequeño verticalmente, puede estar doblado/mal puesto
+            # Evitar falsos incorrectos por chalecos parcialmente visibles.
             epp_height = epp_bbox[3] - epp_bbox[1]
             torso_height = torso_bottom - torso_top
             
-            # El chaleco debe cubrir al menos el 40% del torso
-            if epp_height < torso_height * 0.4:
+            # Solo marcar incorrecto si el bbox es claramente demasiado pequeño.
+            if torso_height > 0 and epp_height < torso_height * 0.25:
                 return False
             
             return True
@@ -817,8 +857,9 @@ class EPPDetector:
         Returns:
             (frame_procesado, detections, compliance)
         """
-        # Detectar keypoints del cuerpo para validación de posicionamiento
-        pose_data = self.detect_pose_keypoints(frame)
+        # Detectar keypoints de todas las personas para validar por asociación EPP-persona
+        pose_people = self.detect_pose_people(frame)
+        pose_data = pose_people[0] if pose_people else None
         
         # Detectar EPP
         detections = self.detect(frame)
@@ -826,10 +867,11 @@ class EPPDetector:
         # Validar posicionamiento de cada EPP detectado
         for det in detections:
             if det['has_epp']:  # Solo validar EPP que están presentes
+                pose_for_det = self._select_best_pose_for_epp(det['bbox'], pose_people)
                 is_correctly_positioned = self.validate_epp_position(
                     det['bbox'], 
                     det['epp_type'], 
-                    pose_data
+                    pose_for_det
                 )
                 det['correctly_positioned'] = is_correctly_positioned
             else:

@@ -5,7 +5,7 @@ Solo renderiza las páginas HTML (maquetado)
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from .routes import pages, video
+from .routes import pages, video, images
 import os
 
 
@@ -27,6 +27,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # Incluir rutas de páginas y video
 app.include_router(pages.router)
 app.include_router(video.router, prefix="/api")
+app.include_router(images.router, prefix="/api")
 
 
 @app.on_event("startup")

@@ -1,0 +1,152 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Procesar Imágenes - EPPVISION{% endblock %}
+
+{% block page_title %}Procesar Imágenes{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto" x-data="{
+    uploading: false,
+    result: null,
+    previewUrl: null,
+    async uploadImage(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            alert('Selecciona una imagen válida.');
+            return;
+        }
+
+        this.uploading = true;
+        this.result = null;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const reader = new FileReader();
+            reader.onload = (e) => { this.previewUrl = e.target.result; };
+            reader.readAsDataURL(file);
+
+            const response = await fetch('/api/images/process', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.detail || 'No se pudo procesar la imagen');
+            }
+
+            this.result = data;
+        } catch (error) {
+            alert(error.message || 'Error procesando la imagen');
+        } finally {
+            this.uploading = false;
+        }
+    },
+    resetAll() {
+        this.result = null;
+        this.previewUrl = null;
+        this.uploading = false;
+        const input = document.getElementById('image-upload-input');
+        if (input) input.value = '';
+    }
+}">
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div class="lg:col-span-2 space-y-6">
+            <div class="bg-[#1E293B] border border-gray-800 rounded-2xl p-6">
+                <div class="flex items-start justify-between mb-4">
+                    <div>
+                        <p class="text-sm uppercase tracking-[0.2em] text-blue-400">Análisis puntual</p>
+                        <h3 class="text-2xl font-bold text-white mt-1">Sube una imagen para inspección</h3>
+                    </div>
+                    <i data-lucide="image" class="w-8 h-8 text-blue-400"></i>
+                </div>
+
+                <p class="text-sm text-gray-400 mb-6">El sistema ejecuta el mismo detector de EPP y valida el posicionamiento sobre una sola imagen.</p>
+
+                <label class="block cursor-pointer">
+                    <input id="image-upload-input" type="file" accept="image/*" @change="uploadImage" class="hidden">
+                    <div class="border-2 border-dashed border-gray-700 rounded-2xl p-8 text-center hover:border-blue-500 transition-all bg-[#0F172A]">
+                        <i data-lucide="upload-cloud" class="w-14 h-14 text-gray-500 mx-auto mb-4"></i>
+                        <p class="text-white font-semibold">Seleccionar imagen</p>
+                        <p class="text-sm text-gray-400 mt-2">JPG, PNG, BMP, WEBP o TIFF</p>
+                    </div>
+                </label>
+
+                <button @click="resetAll" class="mt-4 w-full px-4 py-3 rounded-xl border border-gray-700 text-gray-200 hover:bg-gray-800 transition-all">
+                    Limpiar análisis
+                </button>
+            </div>
+
+            <div x-show="result" class="bg-[#1E293B] border border-gray-800 rounded-2xl p-6">
+                <h4 class="text-lg font-semibold text-white mb-4">Resumen</h4>
+                <div class="grid grid-cols-2 gap-4 text-sm mb-4">
+                    <div class="bg-[#0F172A] rounded-xl p-4">
+                        <p class="text-gray-400">Estado</p>
+                        <p class="text-2xl font-bold mt-1" :class="result?.compliance?.estado === 'C' ? 'text-emerald-400' : result?.compliance?.estado === 'I' ? 'text-amber-400' : 'text-gray-200'" x-text="result?.compliance?.estado || 'N/A'"></p>
+                    </div>
+                    <div class="bg-[#0F172A] rounded-xl p-4">
+                        <p class="text-gray-400">Score</p>
+                        <p class="text-2xl font-bold text-white mt-1" x-text="(result?.compliance?.score ?? 0).toFixed(1)"></p>
+                    </div>
+                    <div class="bg-[#0F172A] rounded-xl p-4">
+                        <p class="text-gray-400">Resolución</p>
+                        <p class="text-white font-semibold mt-1" x-text="result?.resolution || 'N/A'"></p>
+                    </div>
+                    <div class="bg-[#0F172A] rounded-xl p-4">
+                        <p class="text-gray-400">Archivo</p>
+                        <p class="text-white font-semibold mt-1 truncate" x-text="result?.filename || 'N/A'"></p>
+                    </div>
+                </div>
+
+                <div class="bg-gradient-to-br from-[#0F172A] to-[#111827] rounded-2xl p-5 border border-blue-500/20 shadow-lg shadow-blue-950/20">
+                    <p class="text-xs uppercase tracking-[0.28em] text-blue-300 mb-2">Mensaje principal</p>
+                    <p class="text-2xl leading-tight font-extrabold text-white" x-text="result?.compliance?.mensaje || 'Sin observaciones'"></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="lg:col-span-3 space-y-6">
+            <div class="bg-[#1E293B] border border-gray-800 rounded-2xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">Vista previa</h3>
+                        <p class="text-sm text-gray-400">Original y resultado procesado</p>
+                    </div>
+                    <span x-show="uploading" class="text-sm text-blue-400">Procesando...</span>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-px bg-gray-800">
+                    <div class="bg-[#0F172A] p-4">
+                        <p class="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Imagen original</p>
+                        <div class="aspect-[4/3] rounded-xl overflow-hidden bg-black flex items-center justify-center">
+                            <template x-if="previewUrl">
+                                <img :src="previewUrl" alt="Imagen original" class="w-full h-full object-contain">
+                            </template>
+                            <template x-if="!previewUrl">
+                                <div class="text-gray-600 text-sm">Aún no se ha cargado ninguna imagen</div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#0F172A] p-4">
+                        <p class="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Resultado</p>
+                        <div class="aspect-[4/3] rounded-xl overflow-hidden bg-black flex items-center justify-center ring-1 ring-blue-500/20">
+                            <template x-if="result?.processed_image_path">
+                                <img :src="'/' + result.processed_image_path" alt="Imagen procesada" class="w-full h-full object-contain">
+                            </template>
+                            <template x-if="!result?.processed_image_path">
+                                <div class="text-gray-600 text-sm">El resultado aparecerá aquí</div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -37,6 +37,11 @@ async def procesar_videos(request: Request):
     """Procesar Videos Pregrabados"""
     return templates.TemplateResponse("pages/procesar_videos.html", {"request": request})
 
+@router.get("/procesar-imagenes")
+async def procesar_imagenes(request: Request):
+    """Procesar Imágenes"""
+    return templates.TemplateResponse("pages/procesar_imagenes.html", {"request": request})
+
 @router.get("/reportes")
 async def reportes(request: Request):
     """Generar Reportes"""

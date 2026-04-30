@@ -7,8 +7,8 @@
 {% block content %}
 <div class="max-w-7xl mx-auto" x-data="{
     uploading: false,
-    result: null,
-    previewUrl: null,
+    items: [],
+    progress: { done: 0, total: 0 },
     zoomOpen: false,
     zoomSrc: null,
     zoomTitle: '',
@@ -22,46 +22,78 @@
         this.zoomSrc = null;
         this.zoomTitle = '';
     },
-    async uploadImage(event) {
-        const file = event.target.files[0];
-        if (!file) return;
+    async uploadImages(event) {
+        const files = Array.from(event.target.files || []);
+        if (!files.length) return;
 
-        if (!file.type.startsWith('image/')) {
+        const validFiles = files.filter((file) => file.type.startsWith('image/'));
+        if (!validFiles.length) {
             alert('Selecciona una imagen válida.');
             return;
         }
 
-        this.uploading = true;
-        this.result = null;
+        if (validFiles.length > 40) {
+            alert('Puedes procesar hasta 40 imágenes por lote.');
+            return;
+        }
 
-        const formData = new FormData();
-        formData.append('file', file);
+        this.uploading = true;
+        this.items = [];
+        this.progress = { done: 0, total: validFiles.length };
+        this.closeZoom();
+
+        const previews = await Promise.all(validFiles.map((file) => this.readFileAsDataURL(file)));
+        this.items = validFiles.map((file, index) => ({
+            id: `${Date.now()}-${index}`,
+            name: file.name,
+            previewUrl: previews[index],
+            result: null,
+            error: null,
+            processing: true,
+        }));
 
         try {
-            const reader = new FileReader();
-            reader.onload = (e) => { this.previewUrl = e.target.result; };
-            reader.readAsDataURL(file);
+            for (let index = 0; index < validFiles.length; index += 1) {
+                const file = validFiles[index];
+                const formData = new FormData();
+                formData.append('file', file);
 
-            const response = await fetch('/api/images/process', {
-                method: 'POST',
-                body: formData
-            });
+                try {
+                    const response = await fetch('/api/images/process', {
+                        method: 'POST',
+                        body: formData
+                    });
 
-            const data = await response.json();
-            if (!response.ok || !data.success) {
-                throw new Error(data.detail || 'No se pudo procesar la imagen');
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.detail || 'No se pudo procesar la imagen');
+                    }
+
+                    this.items[index].result = data;
+                } catch (error) {
+                    this.items[index].error = error.message || 'Error procesando la imagen';
+                } finally {
+                    this.items[index].processing = false;
+                    this.progress.done += 1;
+                }
             }
-
-            this.result = data;
         } catch (error) {
-            alert(error.message || 'Error procesando la imagen');
+            alert(error.message || 'Error procesando las imágenes');
         } finally {
             this.uploading = false;
         }
     },
+    readFileAsDataURL(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => resolve(event.target.result);
+            reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
+            reader.readAsDataURL(file);
+        });
+    },
     resetAll() {
-        this.result = null;
-        this.previewUrl = null;
+        this.items = [];
+        this.progress = { done: 0, total: 0 };
         this.uploading = false;
         this.closeZoom();
         const input = document.getElementById('image-upload-input');
@@ -74,19 +106,19 @@
                 <div class="flex items-start justify-between mb-4">
                     <div>
                         <p class="text-sm uppercase tracking-[0.2em] text-blue-400">Análisis puntual</p>
-                        <h3 class="text-2xl font-bold text-white mt-1">Sube una imagen para inspección</h3>
+                        <h3 class="text-2xl font-bold text-white mt-1">Sube hasta 40 imágenes para inspección</h3>
                     </div>
                     <i data-lucide="image" class="w-8 h-8 text-blue-400"></i>
                 </div>
 
-                <p class="text-sm text-gray-400 mb-6">El sistema ejecuta el mismo detector de EPP y valida el posicionamiento sobre una sola imagen.</p>
+                <p class="text-sm text-gray-400 mb-6">El sistema procesa cada imagen y te muestra su original y su resultado en tarjetas separadas.</p>
 
                 <label class="block cursor-pointer">
-                    <input id="image-upload-input" type="file" accept="image/*" @change="uploadImage" class="hidden">
+                    <input id="image-upload-input" type="file" accept="image/*" multiple @change="uploadImages" class="hidden">
                     <div class="border-2 border-dashed border-gray-700 rounded-2xl p-8 text-center hover:border-blue-500 transition-all bg-[#0F172A]">
                         <i data-lucide="upload-cloud" class="w-14 h-14 text-gray-500 mx-auto mb-4"></i>
-                        <p class="text-white font-semibold">Seleccionar imagen</p>
-                        <p class="text-sm text-gray-400 mt-2">JPG, PNG, BMP, WEBP o TIFF</p>
+                        <p class="text-white font-semibold">Seleccionar imágenes</p>
+                        <p class="text-sm text-gray-400 mt-2">JPG, PNG, BMP, WEBP o TIFF. Puedes elegir varias a la vez.</p>
                     </div>
                 </label>
 
@@ -95,30 +127,34 @@
                 </button>
             </div>
 
-            <div x-show="result" class="bg-[#1E293B] border border-gray-800 rounded-2xl p-6">
-                <h4 class="text-lg font-semibold text-white mb-4">Resumen</h4>
+            <div x-show="items.length" class="bg-[#1E293B] border border-gray-800 rounded-2xl p-6">
+                <h4 class="text-lg font-semibold text-white mb-4">Resumen del lote</h4>
                 <div class="grid grid-cols-2 gap-4 text-sm mb-4">
                     <div class="bg-[#0F172A] rounded-xl p-4">
-                        <p class="text-gray-400">Estado</p>
-                        <p class="text-2xl font-bold mt-1" :class="result?.compliance?.estado === 'C' ? 'text-emerald-400' : result?.compliance?.estado === 'I' ? 'text-amber-400' : 'text-gray-200'" x-text="result?.compliance?.estado || 'N/A'"></p>
+                        <p class="text-gray-400">Imágenes</p>
+                        <p class="text-2xl font-bold text-white mt-1" x-text="items.length"></p>
                     </div>
                     <div class="bg-[#0F172A] rounded-xl p-4">
-                        <p class="text-gray-400">Score</p>
-                        <p class="text-2xl font-bold text-white mt-1" x-text="(result?.compliance?.score ?? 0).toFixed(1)"></p>
+                        <p class="text-gray-400">Procesadas</p>
+                        <p class="text-2xl font-bold text-white mt-1" x-text="progress.done"></p>
                     </div>
                     <div class="bg-[#0F172A] rounded-xl p-4">
-                        <p class="text-gray-400">Resolución</p>
-                        <p class="text-white font-semibold mt-1" x-text="result?.resolution || 'N/A'"></p>
+                        <p class="text-gray-400">En proceso</p>
+                        <p class="text-2xl font-bold text-white mt-1" x-text="items.filter((item) => item.processing).length"></p>
                     </div>
                     <div class="bg-[#0F172A] rounded-xl p-4">
-                        <p class="text-gray-400">Archivo</p>
-                        <p class="text-white font-semibold mt-1 truncate" x-text="result?.filename || 'N/A'"></p>
+                        <p class="text-gray-400">Con error</p>
+                        <p class="text-2xl font-bold text-white mt-1" x-text="items.filter((item) => item.error).length"></p>
                     </div>
                 </div>
 
+                <div class="h-2 bg-gray-800 rounded-full overflow-hidden mb-4">
+                    <div class="h-full bg-blue-600 transition-all duration-300" :style="`width: ${items.length ? (progress.done / items.length) * 100 : 0}%`"></div>
+                </div>
+
                 <div class="bg-gradient-to-br from-[#0F172A] to-[#111827] rounded-2xl p-5 border border-blue-500/20 shadow-lg shadow-blue-950/20">
-                    <p class="text-xs uppercase tracking-[0.28em] text-blue-300 mb-2">Mensaje principal</p>
-                    <p class="text-2xl leading-tight font-extrabold text-white" x-text="result?.compliance?.mensaje || 'Sin observaciones'"></p>
+                    <p class="text-xs uppercase tracking-[0.28em] text-blue-300 mb-2">Estado del lote</p>
+                    <p class="text-xl leading-tight font-extrabold text-white" x-text="uploading ? 'Procesando imágenes...' : 'Lote listo' "></p>
                 </div>
             </div>
         </div>
@@ -127,71 +163,94 @@
             <div class="bg-[#1E293B] border border-gray-800 rounded-2xl overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
                     <div>
-                        <h3 class="text-lg font-semibold text-white">Vista previa</h3>
-                        <p class="text-sm text-gray-400">Original y resultado procesado</p>
+                        <h3 class="text-lg font-semibold text-white">Resultados del lote</h3>
+                        <p class="text-sm text-gray-400">Cada tarjeta muestra la imagen original y su resultado</p>
                     </div>
                     <span x-show="uploading" class="text-sm text-blue-400">Procesando...</span>
                 </div>
 
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-px bg-gray-800">
-                    <div class="bg-[#0F172A] p-4">
-                        <p class="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Imagen original</p>
-                        <button type="button" class="group w-full aspect-[4/3] rounded-xl overflow-hidden bg-black flex items-center justify-center cursor-zoom-in ring-1 ring-transparent hover:ring-blue-500/40 transition-all relative"
-                                @click="previewUrl && openZoom(previewUrl, 'Imagen original')">
-                            <template x-if="previewUrl">
-                                <img :src="previewUrl" alt="Imagen original" class="w-full h-full object-contain">
-                            </template>
-                            <template x-if="!previewUrl">
-                                <div class="text-gray-600 text-sm">Aún no se ha cargado ninguna imagen</div>
-                            </template>
-                            <div x-show="previewUrl" class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
-                        </button>
-                        <div class="mt-3 flex gap-3">
-                            <button type="button"
-                                    class="flex-1 px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-200 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                    :disabled="!previewUrl"
-                                    @click="previewUrl && openZoom(previewUrl, 'Imagen original')">
-                                Ver grande
-                            </button>
-                            <a x-show="previewUrl"
-                               :href="previewUrl"
-                               :download="result?.filename ? `original_${result.filename}` : 'imagen_original.jpg'"
-                               class="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-sm text-white text-center hover:bg-blue-500 transition-colors">
-                                Descargar
-                            </a>
+                <div class="p-4 md:p-6">
+                    <template x-if="!items.length">
+                        <div class="rounded-2xl border border-dashed border-gray-700 bg-[#0F172A] p-10 text-center text-gray-400">
+                            Selecciona varias imágenes para ver aquí cada original y su resultado.
                         </div>
-                    </div>
+                    </template>
 
-                    <div class="bg-[#0F172A] p-4">
-                        <p class="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Resultado</p>
-                        <button type="button" class="group w-full aspect-[4/3] rounded-xl overflow-hidden bg-black flex items-center justify-center cursor-zoom-in ring-1 ring-blue-500/20 hover:ring-blue-400 transition-all relative"
-                                @click="result?.processed_image_path && openZoom('/' + result.processed_image_path, 'Resultado procesado')">
-                            <template x-if="result?.processed_image_path">
-                                <img :src="'/' + result.processed_image_path" alt="Imagen procesada" class="w-full h-full object-contain">
-                            </template>
-                            <template x-if="!result?.processed_image_path">
-                                <div class="text-gray-600 text-sm">El resultado aparecerá aquí</div>
-                            </template>
-                            <div x-show="result?.processed_image_path" class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
-                        </button>
-                        <div class="mt-3 flex gap-3">
-                            <button type="button"
-                                    class="flex-1 px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-200 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                    :disabled="!result?.processed_image_path"
-                                    @click="result?.processed_image_path && openZoom('/' + result.processed_image_path, 'Resultado procesado')">
-                                Ver grande
-                            </button>
-                            <a x-show="result?.processed_image_path"
-                               :href="'/' + result.processed_image_path"
-                               :download="result?.filename ? `resultado_${result.filename}` : 'imagen_procesada.jpg'"
-                               class="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-sm text-white text-center hover:bg-blue-500 transition-colors">
-                                Descargar
-                            </a>
-                        </div>
+                    <div class="space-y-6">
+                        <template x-for="item in items" :key="item.id">
+                            <div class="rounded-2xl border border-gray-800 bg-[#0F172A] overflow-hidden">
+                                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 px-5 py-4 border-b border-gray-800">
+                                    <div>
+                                        <p class="text-white font-semibold truncate" x-text="item.name"></p>
+                                        <p class="text-xs uppercase tracking-[0.22em] text-gray-500 mt-1" x-text="item.processing ? 'Procesando' : item.error ? 'Error' : 'Completado'"></p>
+                                    </div>
+                                    <div class="text-sm" :class="item.error ? 'text-rose-400' : item.processing ? 'text-blue-400' : 'text-emerald-400'" x-text="item.error || (item.processing ? 'Procesando...' : 'Listo')"></div>
+                                </div>
+
+                                <div class="grid grid-cols-1 xl:grid-cols-2 gap-px bg-gray-800">
+                                    <div class="bg-[#0B1220] p-4">
+                                        <p class="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Imagen original</p>
+                                        <button type="button" class="group w-full aspect-[4/3] rounded-xl overflow-hidden bg-black flex items-center justify-center cursor-zoom-in ring-1 ring-transparent hover:ring-blue-500/40 transition-all relative"
+                                                @click="openZoom(item.previewUrl, 'Imagen original')">
+                                            <img :src="item.previewUrl" alt="Imagen original" class="w-full h-full object-contain">
+                                            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
+                                        </button>
+                                        <div class="mt-3 flex gap-3">
+                                            <button type="button"
+                                                    class="flex-1 px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-200 hover:bg-gray-800 transition-colors"
+                                                    @click="openZoom(item.previewUrl, 'Imagen original')">
+                                                Ver grande
+                                            </button>
+                                            <a :href="item.previewUrl"
+                                               :download="`original_${item.name}`"
+                                               class="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-sm text-white text-center hover:bg-blue-500 transition-colors">
+                                                Descargar
+                                            </a>
+                                        </div>
+                                    </div>
+
+                                    <div class="bg-[#0B1220] p-4">
+                                        <p class="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Resultado</p>
+                                        <template x-if="item.result?.processed_image_path">
+                                            <div>
+                                                <button type="button" class="group w-full aspect-[4/3] rounded-xl overflow-hidden bg-black flex items-center justify-center cursor-zoom-in ring-1 ring-blue-500/20 hover:ring-blue-400 transition-all relative"
+                                                        @click="openZoom('/' + item.result.processed_image_path, 'Resultado procesado')">
+                                                    <img :src="'/' + item.result.processed_image_path" alt="Imagen procesada" class="w-full h-full object-contain">
+                                                    <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
+                                                </button>
+                                                <div class="mt-3 flex gap-3">
+                                                    <button type="button"
+                                                            class="flex-1 px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-200 hover:bg-gray-800 transition-colors"
+                                                            @click="openZoom('/' + item.result.processed_image_path, 'Resultado procesado')">
+                                                        Ver grande
+                                                    </button>
+                                                    <a :href="'/' + item.result.processed_image_path"
+                                                       :download="`resultado_${item.name}`"
+                                                       class="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-sm text-white text-center hover:bg-blue-500 transition-colors">
+                                                        Descargar
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <template x-if="item.processing">
+                                            <div class="aspect-[4/3] rounded-xl bg-black flex items-center justify-center text-gray-500 text-sm">
+                                                Procesando resultado...
+                                            </div>
+                                        </template>
+
+                                        <template x-if="item.error">
+                                            <div class="aspect-[4/3] rounded-xl border border-rose-900/40 bg-rose-950/20 flex items-center justify-center p-4 text-center text-rose-300 text-sm">
+                                                <span x-text="item.error"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </div>
-
         </div>
     </div>
 

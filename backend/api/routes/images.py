@@ -2,13 +2,16 @@
 Rutas para procesamiento de imágenes con detección de EPP.
 """
 from fastapi import APIRouter, HTTPException, UploadFile, File
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 import cv2
 import os
 import sys
 import uuid
 from pathlib import Path
 import numpy as np
+import zipfile
+import io
+from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
@@ -101,4 +104,43 @@ async def process_image(file: UploadFile = File(...)):
         raise
     except Exception as e:
         print(f"[IMAGES ERROR] Error procesando imagen: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/images/download-both/{image_id}")
+async def download_both_images(image_id: str):
+    """Descarga la imagen original y procesada en un archivo ZIP."""
+    try:
+        # Buscar la imagen original
+        original_files = list(ORIGINAL_IMAGE_DIR.glob(f"{image_id}.*"))
+        if not original_files:
+            raise HTTPException(status_code=404, detail="Imagen original no encontrada")
+        
+        original_path = original_files[0]
+        result_path = RESULT_IMAGE_DIR / f"{image_id}.jpg"
+        
+        if not result_path.exists():
+            raise HTTPException(status_code=404, detail="Imagen procesada no encontrada")
+        
+        # Crear ZIP en memoria para evitar persistir archivos .zip en disco
+        download_folder_name = f"{image_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.writestr(
+                f"{download_folder_name}/original_{original_path.name}",
+                original_path.read_bytes()
+            )
+            zipf.writestr(
+                f"{download_folder_name}/resultado_{result_path.name}",
+                result_path.read_bytes()
+            )
+
+        zip_buffer.seek(0)
+        headers = {"Content-Disposition": f"attachment; filename={download_folder_name}.zip"}
+        return StreamingResponse(zip_buffer, media_type="application/zip", headers=headers)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[IMAGES ERROR] Error descargando imágenes: {e}")
         raise HTTPException(status_code=500, detail=str(e))

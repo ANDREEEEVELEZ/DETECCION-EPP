@@ -22,6 +22,26 @@
         this.zoomSrc = null;
         this.zoomTitle = '';
     },
+    async downloadBothImages(imageId) {
+        try {
+            const response = await fetch(`/api/images/download-both/${imageId}`);
+            if (!response.ok) {
+                throw new Error('Error al descargar las imágenes');
+            }
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${imageId}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    },
     async uploadImages(event) {
         const files = Array.from(event.target.files || []);
         if (!files.length) return;
@@ -184,7 +204,17 @@
                                         <p class="text-white font-semibold truncate" x-text="item.name"></p>
                                         <p class="text-xs uppercase tracking-[0.22em] text-gray-500 mt-1" x-text="item.processing ? 'Procesando' : item.error ? 'Error' : 'Completado'"></p>
                                     </div>
-                                    <div class="text-sm" :class="item.error ? 'text-rose-400' : item.processing ? 'text-blue-400' : 'text-emerald-400'" x-text="item.error || (item.processing ? 'Procesando...' : 'Listo')"></div>
+                                    <div class="flex items-center gap-3">
+                                        <div class="text-sm" :class="item.error ? 'text-rose-400' : item.processing ? 'text-blue-400' : 'text-emerald-400'" x-text="item.error || (item.processing ? 'Procesando...' : 'Listo')"></div>
+                                        <template x-if="item.result && !item.error && !item.processing">
+                                            <button type="button" 
+                                                    @click="downloadBothImages(item.result.image_id)"
+                                                    class="px-4 py-2 rounded-lg bg-green-600 text-sm text-white hover:bg-green-500 transition-colors whitespace-nowrap flex items-center gap-2">
+                                                <i data-lucide="download" class="w-4 h-4"></i>
+                                                Descargar ambas
+                                            </button>
+                                        </template>
+                                    </div>
                                 </div>
 
                                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-px bg-gray-800">

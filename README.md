@@ -125,6 +125,15 @@ Gestión de cámaras, parámetros del modelo IA y canales de alerta.
 APP_NAME=EPPVISION
 API_HOST=0.0.0.0
 API_PORT=8000
+
+EMAIL_ALERTS_ENABLED=1
+SMTP_HOST=smtp.tu-servidor.com
+SMTP_PORT=587
+SMTP_USER=alertas@tu-dominio.com
+SMTP_PASSWORD=tu_password
+SMTP_FROM=alertas@tu-dominio.com
+ALERT_EMAIL_TO=supervisor@tu-dominio.com,seguridad@tu-dominio.com
+SMTP_USE_TLS=1
 ```
 
 ## 📊 Próximas Funcionalidades
@@ -132,7 +141,8 @@ API_PORT=8000
 - [ ] Integración con YOLOv8 para detección real
 - [ ] Conexión a base de datos MySQL
 - [ ] WebSockets para streaming en tiempo real
-- [ ] Sistema de alertas por email/SMS
+- [x] Sistema de alertas por email
+- [ ] Sistema de alertas por SMS
 - [ ] Exportación de reportes PDF/Excel
 - [ ] Tracking multi-persona
 - [ ] Estimación de pose corporal

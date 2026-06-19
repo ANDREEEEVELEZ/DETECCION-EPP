@@ -2,10 +2,15 @@
 Gestor de Alertas y Detecciones
 Guarda detecciones en base de datos y genera alertas cuando hay incumplimiento
 """
-from typing import Dict, List
+from typing import Dict, List, Optional
 from datetime import datetime
+import mimetypes
+import os
+import smtplib
+from email.message import EmailMessage
+from pathlib import Path
 from sqlalchemy.orm import Session
-from backend.core.database import SessionLocal, Deteccion, DeteccionEPP, Alerta, TipoEPP
+from backend.core.database import SessionLocal, Camera, Deteccion, DeteccionEPP, Alerta, TipoEPP
 
 class AlertManager:
     def __init__(self):
@@ -16,10 +21,110 @@ class AlertManager:
             'botas': 4,
             'gafas': 5
         }
+
+        self.email_alerts_enabled = os.getenv("EMAIL_ALERTS_ENABLED", "0").lower() in ("1", "true", "yes", "on")
+        self.smtp_host = os.getenv("SMTP_HOST", "").strip()
+        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        self.smtp_user = os.getenv("SMTP_USER", "").strip()
+        self.smtp_password = os.getenv("SMTP_PASSWORD", "")
+        self.smtp_from = os.getenv("SMTP_FROM", self.smtp_user or "alertas@localhost").strip()
+        self.smtp_to = [email.strip() for email in os.getenv("ALERT_EMAIL_TO", "").split(",") if email.strip()]
+        self.smtp_use_tls = os.getenv("SMTP_USE_TLS", "1").lower() in ("1", "true", "yes", "on")
     
     def _get_db(self) -> Session:
         """Obtiene sesión de base de datos"""
         return SessionLocal()
+
+    def _project_root(self) -> Path:
+        return Path(__file__).resolve().parents[2]
+
+    def _resolve_snapshot_path(self, imagen_path: Optional[str]) -> Optional[Path]:
+        if not imagen_path:
+            return None
+
+        relative_path = Path(imagen_path)
+        if relative_path.is_absolute():
+            return relative_path if relative_path.exists() else None
+
+        candidate = self._project_root() / "backend" / relative_path
+        return candidate if candidate.exists() else None
+
+    def _build_email_message(self, camera_nombre: str, camera_zona: str, alerta: Alerta, compliance: Dict, attachment_paths: List[Path]) -> Optional[EmailMessage]:
+        if not self.email_alerts_enabled:
+            return None
+
+        if not self.smtp_host or not self.smtp_to:
+            print("[ALERT EMAIL] Configuración SMTP incompleta; se omite el envío por correo")
+            return None
+
+        fecha_evento = alerta.timestamp.strftime("%Y-%m-%d %H:%M:%S") if alerta.timestamp else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if compliance.get("estado") == "N":
+            asunto_estado = "EPP nulo"
+            descripcion = "Se detectó personal sin EPP."
+        else:
+            asunto_estado = "EPP mal puesto o incompleto"
+            descripcion = "Se detectó personal con EPP mal colocado o incompleto."
+
+        mensaje = EmailMessage()
+        mensaje["Subject"] = f"[VISION_EPP] {asunto_estado} - {camera_nombre}"
+        mensaje["From"] = self.smtp_from
+        mensaje["To"] = ", ".join(self.smtp_to)
+
+        cuerpo = [
+            "Alerta automática de incumplimiento de EPP.",
+            "",
+            descripcion,
+            f"Estado detectado: {compliance.get('estado', 'N/A')}",
+            f"Mensaje: {compliance.get('mensaje', alerta.mensaje or 'Sin detalle')}",
+            f"Cámara: {camera_nombre}",
+            f"Ubicación: {camera_zona}",
+            f"Fecha y hora: {fecha_evento}",
+            f"Severidad: {alerta.severidad}",
+            f"Tipo de alerta: {alerta.tipo}",
+            "",
+            "Evidencias adjuntas en imagen.",
+        ]
+        mensaje.set_content("\n".join(cuerpo))
+
+        for attachment_path in attachment_paths:
+            mime_type, _ = mimetypes.guess_type(str(attachment_path))
+            if mime_type:
+                main_type, sub_type = mime_type.split("/", 1)
+            else:
+                main_type, sub_type = "application", "octet-stream"
+
+            with open(attachment_path, "rb") as file_handle:
+                mensaje.add_attachment(
+                    file_handle.read(),
+                    maintype=main_type,
+                    subtype=sub_type,
+                    filename=attachment_path.name,
+                )
+
+        return mensaje
+
+    def _send_email_alert(self, camera_nombre: str, camera_zona: str, imagen_path: Optional[str], alerta: Alerta, compliance: Dict) -> None:
+        attachment_paths: List[Path] = []
+        snapshot_path = self._resolve_snapshot_path(imagen_path)
+        if snapshot_path is not None:
+            attachment_paths.append(snapshot_path)
+
+        mensaje = self._build_email_message(camera_nombre, camera_zona, alerta, compliance, attachment_paths)
+        if mensaje is None:
+            return
+
+        try:
+            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10) as smtp:
+                if self.smtp_use_tls:
+                    smtp.starttls()
+                if self.smtp_user:
+                    smtp.login(self.smtp_user, self.smtp_password)
+                smtp.send_message(mensaje)
+
+            print(f"[ALERT EMAIL] Correo enviado para alerta {alerta.id} a {', '.join(self.smtp_to)}")
+        except Exception as e:
+            print(f"[ALERT EMAIL ERROR] No se pudo enviar el correo de alerta: {e}")
     
     def save_detection(self, camera_id: int, detections: List[Dict], compliance: Dict, frame=None) -> int:
         """
@@ -139,7 +244,7 @@ class AlertManager:
             if compliance['estado'] == 'N':
                 tipo = 'sin_epp'
                 severidad = 'critica'
-                mensaje = 'Trabajador sin EPP detectado'
+                mensaje = 'Trabajadores no portan EPP (EPP nulo)'
             else:  # Estado 'I'
                 missing = compliance.get('missing_epp')
                 incorrectly_positioned = compliance.get('incorrectly_positioned', [])
@@ -169,7 +274,7 @@ class AlertManager:
                     partes.append(f"Mal puesto: {', '.join(incorrectly_positioned)}")
                 if missing:
                     partes.append(f"Falta: {', '.join(missing)}")
-                mensaje = "EPP incorrecto: " + (" | ".join(partes) if partes else "Uso incorrecto")
+                mensaje = "Trabajadores no portan EPP correctamente: " + (" | ".join(partes) if partes else "Uso incorrecto")
             
             # Crear alerta
             alerta = Alerta(
@@ -184,6 +289,20 @@ class AlertManager:
             
             db.add(alerta)
             db.commit()
+            db.refresh(alerta)
+
+            camera = db.query(Camera).filter(Camera.id == camera_id).first()
+            deteccion = db.query(Deteccion).filter(Deteccion.id == deteccion_id).first()
+
+            if deteccion is not None and camera is not None:
+                print(f"[ALERT EMAIL] Preparando envío para alerta {alerta.id} | camera={camera.nombre} | zona={camera.zona} | estado={compliance.get('estado')}")
+                self._send_email_alert(
+                    camera_nombre=camera.nombre,
+                    camera_zona=camera.zona,
+                    imagen_path=deteccion.imagen_path,
+                    alerta=alerta,
+                    compliance=compliance,
+                )
             
             print(f"[ALERT] Generada alerta {severidad.upper()}: {mensaje} (Cámara {camera_id})")
             return alerta.id

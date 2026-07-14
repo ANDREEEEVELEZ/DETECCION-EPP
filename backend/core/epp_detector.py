@@ -3,6 +3,7 @@ Detector de EPP usando YOLOv8
 """
 import cv2
 import numpy as np
+import torch
 from ultralytics import YOLO
 from typing import List, Dict, Tuple, Optional
 
@@ -23,21 +24,29 @@ class EPPDetector:
         self.model_path = model_path
         self.conf_threshold = conf_threshold
         self.iou_threshold = 0.45
-        
+
+        # Usar GPU (CUDA) si está disponible para acelerar la inferencia
+        self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+        self.half = self.device != 'cpu'  # FP16 solo tiene sentido en GPU
+        print(f"[EPP Detector] Dispositivo de inferencia: {self.device}"
+              f"{' (' + torch.cuda.get_device_name(0) + ')' if self.half else ''}")
+
         # Cargar modelo de detección de EPP
         print(f"[EPP Detector] Cargando modelo desde: {model_path}")
         try:
             self.model = YOLO(model_path)
+            self.model.to(self.device)
             print(f"[EPP Detector] Modelo cargado exitosamente")
             print(f"[EPP Detector] Clases del modelo: {self.model.names}")
         except Exception as e:
             print(f"[EPP Detector ERROR] No se pudo cargar el modelo: {e}")
             raise
-        
+
         # Cargar modelo de pose para validación de posicionamiento
         print(f"[EPP Detector] Cargando modelo YOLOv8-Pose...")
         try:
             self.pose_model = YOLO('yolov8n-pose.pt')  # Modelo ligero de pose
+            self.pose_model.to(self.device)
             print(f"[EPP Detector] Modelo de pose cargado exitosamente")
         except Exception as e:
             print(f"[EPP Detector WARNING] No se pudo cargar modelo de pose: {e}")
@@ -150,7 +159,8 @@ class EPPDetector:
                 }
             ]
         """
-        results = self.model(frame, conf=self.conf_threshold, iou=self.iou_threshold, verbose=False)
+        results = self.model(frame, conf=self.conf_threshold, iou=self.iou_threshold, verbose=False,
+                             device=self.device, half=self.half)
         
         detections = []
         for result in results:
@@ -209,7 +219,8 @@ class EPPDetector:
         
         try:
             # AUMENTAR confianza mínima para detección de pose
-            results = self.pose_model(frame, conf=0.4, verbose=False)  # Aumentado de 0.3 a 0.4
+            results = self.pose_model(frame, conf=0.4, verbose=False,  # Aumentado de 0.3 a 0.4
+                                      device=self.device, half=self.half)
             
             if len(results) > 0 and results[0].keypoints is not None:
                 keypoints_data = results[0].keypoints.data.cpu().numpy()

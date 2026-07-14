@@ -13,7 +13,9 @@ sqlalchemy==2.0.23
 opencv-python==4.8.1.78
 numpy==1.24.3
 
-# Para futuro (YOLOv8 y procesamiento)
-# ultralytics==8.0.0
-# torch>=2.0.0
-# numpy>=1.24.0
+# Detección EPP (YOLOv8)
+ultralytics==8.3.240
+# torch/torchvision se instalan aparte con soporte CUDA si hay GPU NVIDIA disponible:
+# pip install torch==2.9.1+cu128 torchvision==0.24.1+cu128 --index-url https://download.pytorch.org/whl/cu128
+torch==2.9.1
+torchvision==0.24.1
